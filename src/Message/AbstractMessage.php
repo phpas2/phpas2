@@ -152,6 +152,15 @@ abstract class AbstractMessage
     }
 
     /**
+     * Retrieve adapter for message.
+     *
+     * @return Adapter
+     */
+    public function getAdapter() {
+        return $this->adapter;
+    }
+
+    /**
      * Get authentication object
      *
      * @return Authentication

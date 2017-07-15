@@ -21,13 +21,21 @@ use PHPAS2\Exception\HttpErrorResponseException;
  */
 class Response
 {
-    protected $as2response;
     protected $content;
     protected $error;
     protected $headers      = [];
     protected $index        = 0;
     protected $info;
     protected $mdnResponse;
+
+    /**
+     * Get contents of response.
+     *
+     * @return mixed
+     */
+    public function getContent() {
+        return $this->content;
+    }
 
     /**
      * Capture all headers used during request, including redirects
@@ -54,12 +62,12 @@ class Response
     }
 
     /**
-     * Get response
+     * Get MDN response
      *
      * @return mixed
      */
-    public function getAs2Response() {
-        return $this->as2response;
+    public function getMdnResponse() {
+        return $this->mdnResponse;
     }
 
     /**
@@ -131,9 +139,9 @@ class Response
      * Send MDN
      */
     public function sendMDN() {
-        $responseHeaders = $this->as2response->getLastResponse()['headers'];
-        $this->as2response = new Request($this, $responseHeaders);
-        $this->as2response->getObject();
-        $this->as2response->decode();
+        $responseHeaders = $this->getLastResponse()['headers'];
+        $this->mdnResponse = new Request($this, $responseHeaders);
+        $this->mdnResponse->getObject();
+        $this->mdnResponse->decode();
     }
 }
