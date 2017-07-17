@@ -78,6 +78,8 @@ class Partner
     protected $mdnSubject;
     /** @var  string */
     protected $mdnUrl;
+    /** @var  string */
+    protected $name;
     /** @var string Path to folder containing partner configuration folders */
     protected $partnerConfigDir;
     /** @var  string */
@@ -617,6 +619,18 @@ class Partner
      */
     public function setMdnUrl($url) {
         $this->mdnUrl = $url;
+        return $this;
+    }
+
+    /**
+     * Set the friendly name of the partner.
+     *
+     * @param string $name
+     *
+     * @return $this
+     */
+    public function setName($name) {
+        $this->name = $name;
         return $this;
     }
 

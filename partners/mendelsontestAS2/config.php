@@ -31,5 +31,6 @@ return [
     'send_compress'            => false,
     'send_content_type'        => 'application/EDI-Consent',
     'send_encoding'            => Partner::ENCODING_BASE64,
+    'send_subject'             => 'AS2 Message Subject',
     'send_url'                 => 'http://testas2.mendelson-e-c.com:8080/as2/HttpReceiver'
 ];
