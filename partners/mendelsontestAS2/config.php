@@ -7,9 +7,7 @@
  * @author   Brett <bap14@users.noreply.github.com>
  */
 
-// TODO: Find a better way to do this....
-require_once('./../../src/Partner.php');
-require_once('./../../src/Partner/Authentication.php');
+require_once(realpath(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR . 'vendor/autoload.php');
 
 use PHPAS2\Partner;
 
@@ -18,7 +16,7 @@ return [
     'email'                    => '',
     'comment'                  => 'Test AS2 endpoint powered by Mendelson AS2 Software',
     'is_local'                 => false,
-    'name'                     => 'Mendelson AS2',
+    'name'                     => 'Mendelson Test AS2',
     'mdn_authentication'       => new Partner\Authentication(),
     'mdn_request'              => Partner::MDN_SYNC,
     'mdn_signed'               => true,
