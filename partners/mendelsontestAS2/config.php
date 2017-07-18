@@ -7,7 +7,7 @@
  * @author   Brett <bap14@users.noreply.github.com>
  */
 
-require_once(realpath(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR . 'vendor/autoload.php');
+require_once(dirname(dirname(dirname(dirname(dirname(__FILE__))))) . DIRECTORY_SEPARATOR . 'autoload.php');
 
 use PHPAS2\Partner;
 
@@ -22,7 +22,7 @@ return [
     'mdn_signed'               => true,
     'mdn_subject'              => 'AS2 MDN Subject',
     'mdn_url'                  => 'http://testas2.mendelson-e-c.com:8080/as2/HttpReceiver',
-    'sec_certificate'          => 'security-certificate.cer',
+    'sec_certificate'          => realpath(dirname(__FILE__)) . DIRECTORY_SEPARATOR . 'security-certificate.cer',
     'sec_encryption_algorithm' => Partner::CRYPT_3DES,
     'sec_pkcs12'               => null,
     'sec_pkcs12_password'      => null,

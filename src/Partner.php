@@ -113,7 +113,7 @@ class Partner
      * @param array $data
      */
     public function __construct(array $data=[]) {
-        $this->setPartnerConfigsDir(realpath(dirname(__FILE__) . '/../../partners'));
+        $this->setPartnerConfigsDir(realpath(dirname(dirname(__FILE__))) . DIRECTORY_SEPARATOR . 'partners');
         $this->loadFromArray($data);
     }
 
@@ -268,6 +268,15 @@ class Partner
      */
     public function getMdnUrl() {
         return $this->mdnUrl;
+    }
+
+    /**
+     * Get path to directory containing partner configurations.
+     *
+     * @return string
+     */
+    public function getPartnerConfigsDir() {
+        return $this->partnerConfigDir . DIRECTORY_SEPARATOR;
     }
 
     /**
@@ -645,7 +654,7 @@ class Partner
         if (is_file($certificate)) {
             $this->secCertificate = file_get_contents($certificate);
         }
-        else {
+        else if (mb_strlen(trim($certificate)) > 0) {
             $certInfo = openssl_x509_parse($certificate);
             if (!is_array($certInfo)) {
                 throw new InvalidX509CertificateException(
@@ -656,6 +665,9 @@ class Partner
             unset ($certInfo);
 
             $this->secCertificate = $certificate;
+        }
+        else {
+            $this->secCertificate = null;
         }
 
         return $this;
@@ -669,7 +681,7 @@ class Partner
      * @throws InvalidEncryptionAlgorithmException
      */
     public function setSecEncryptionAlgorithm($algorithm) {
-        if (!in_array($algorithm, array_values($this->getAvailableEncryptionAlgorithms()))) {
+        if (!in_array($algorithm, array_keys($this->getAvailableEncryptionAlgorithms()))) {
             throw new InvalidEncryptionAlgorithmException(
                 sprintf('Unknown encryption algorithm "%s".', $algorithm)
             );
@@ -689,7 +701,7 @@ class Partner
         if (is_file($pkcs12)) {
             $this->secPkcs12 = file_get_contents($pkcs12);
         }
-        else {
+        else if (strlen(trim($pkcs12))) {
             $bundle = [];
             $valid = openssl_pkcs12_read($pkcs12, $bundle, $this->getSecPkcs12Password());
             if (!$valid) {
@@ -698,6 +710,10 @@ class Partner
             unset($bundle, $valid);
             $this->secPkcs12 = $pkcs12;
         }
+        else {
+            $this->secPkcs12 = null;
+        }
+
         return $this;
     }
 
@@ -720,7 +736,7 @@ class Partner
      * @throws InvalidSignatureAlgorithmException
      */
     public function setSecSignatureAlgorithm($algorithm) {
-        if (!in_array($algorithm, array_values($this->getAvailableSignatureAlgorithms()))) {
+        if (!in_array($algorithm, array_keys($this->getAvailableSignatureAlgorithms()))) {
             throw new InvalidSignatureAlgorithmException(
                 sprintf('Unknown signature algorithm "%s".', $algorithm)
             );
@@ -770,7 +786,7 @@ class Partner
      * @throws InvalidEncodingException
      */
     public function setSendEncoding($encoding) {
-        if (!in_array($encoding, array_values($this->getAvailableEncodingMethods()))) {
+        if (!in_array($encoding, array_keys($this->getAvailableEncodingMethods()))) {
             throw new InvalidEncodingException(sprintf('Unsupported encoding "%s"', $encoding));
         }
         $this->sendEncoding = $encoding;
