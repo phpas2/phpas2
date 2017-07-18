@@ -29,11 +29,5 @@
   "autoload": {
     "psr-4": { "PHPAS2\\": "src/" }
   },
-  "bin": [ "bin/AS2Secure.jar" ],
-  "scripts": {
-    "post-package-install": [
-      "PHPAS2\\Scripts\\PostPackageInstall::createMessageDirs",
-      "PHPAS2\\Scripts\\PostPackageInstall::createLogsDir"
-    ]
-  }
+  "bin": [ "bin/AS2Secure.jar" ]
 }
