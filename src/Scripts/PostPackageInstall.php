@@ -7,6 +7,8 @@
  * @author   Brett <bap14@users.noreply.github.com>
  */
 
+namespace PHPAS2\Scripts;
+
 /**
  * Class PostPackageInstall
  *
