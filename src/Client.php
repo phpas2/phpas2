@@ -9,6 +9,10 @@
 
 namespace PHPAS2;
 
+use PHPAS2\Exception\InvalidMessageException;
+use PHPAS2\Message\AbstractMessage;
+use PHPAS2\Message\Adapter;
+
 /**
  * Class Client
  *
@@ -22,30 +26,60 @@ class Client
     protected $request;
     protected $response;
 
+    /**
+     * Client constructor.
+     *
+     *
+     */
     public function __construct() {
         $this->response = new Response();
     }
 
+    /**
+     * Get the response to a request
+     *
+     * @return Response
+     */
     public function getResponse() {
         return $this->response;
     }
 
-    public function sendRequest(MessageAbstract $request) {
-        if (!($request instanceof MessageAbstract)) {
+    /**
+     * Send a request to the receiving partner
+     *
+     * @param AbstractMessage $request
+     *
+     * @return $this
+     * @throws InvalidMessageException
+     */
+    public function sendRequest(AbstractMessage $request) {
+        if (!($request instanceof AbstractMessage)) {
             throw new InvalidMessageException('Unexpected message type received.  Expected Message or MDN.');
         }
 
         $this->request = $request;
 
-        $headers = $request->getHeaders()->toArray();
+        $headers = $this->request->getHeaders()->toArray();
+
+        $url = parse_url($this->request->getUrl());
+        $port = array_key_exists('port', $url) ? $url['port'] : 80;
+
+        $endpoint = $url['scheme'] . '://' . $url['host'] . $url['path'];
+        if (array_key_exists('query', $url) && $url['query']) {
+            $endpoint .= '?' . $url['query'];
+        }
+        if (array_key_exists('fragment', $url) && $url['fragment']) {
+            $endpoint .= '#' . $url['fragment'];
+        }
 
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL            => $request->getUrl(),
+            CURLOPT_URL            => $endpoint,
+            CURLOPT_PORT           => $port,
             CURLOPT_HEADER         => false,
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_BINARYTRANSFER => true,
+            CURLOPT_BINARYTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 10,
             CURLOPT_TIMEOUT        => 30,
@@ -56,6 +90,8 @@ class Client
             CURLOPT_USERAGENT      => Adapter::getServerSignature(),
             CURLOPT_HEADERFUNCTION => array($this->response, 'curlHeaderHandler')
         ]);
+
+        var_dump($this->request->getContents());exit;
 
         $auth = $request->getAuthentication();
         if ($auth->hasAuthentication()) {
@@ -68,8 +104,8 @@ class Client
         $this->response->handle($ch);
 
         if (
-            $request instanceof MessageAbstract &&
-            $request->getReceivingPartner()->getMdnRequest() == Partner::ACKNOWLEDGE_SYNC
+            $request instanceof AbstractMessage &&
+            $request->getReceivingPartner()->getMdnRequest() == Partner::MDN_SYNC
         ) {
             $this->response->sendMDN();
         }

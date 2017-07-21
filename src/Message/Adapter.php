@@ -12,6 +12,8 @@ namespace PHPAS2\Message;
 use PHPAS2\Exception\CommandExecutionException;
 use PHPAS2\Exception\InvalidDataStructureException;
 use PHPAS2\Exception\InvalidPartnerException;
+use PHPAS2\Exception\InvalidPathException;
+use PHPAS2\Exception\MessageEncryptionException;
 use PHPAS2\Exception\NoFilesProvidedException;
 use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
@@ -33,7 +35,11 @@ class Adapter
     /** @var string */
     protected $binDir;
     /** @var string */
+    protected $jarPath;
+    /** @var string */
     protected $javaPath;
+    /** @var string */
+    protected $opensslPath;
     /** @var Partner */
     protected $receivingPartner;
     /** @var Partner */
@@ -46,11 +52,13 @@ class Adapter
      */
     public function __construct()
     {
-        $this->javaPath = 'java';
         // Default to the composer "vendor/bin" directory above this module
-        $this->jarPath  = realpath(
+        $vendorBin = realpath(
             dirname(dirname(dirname(dirname(dirname(__FILE__))))) . DIRECTORY_SEPARATOR . 'bin'
         );
+        $this->setJavaPath('/usr/bin/java');
+        $this->setJarPath($vendorBin . DIRECTORY_SEPARATOR . 'AS2Secure.jar');
+        $this->setOpensslPath('/usr/bin/openssl');
     }
 
     /**
@@ -139,9 +147,6 @@ class Adapter
         return $destinationFile;
     }
 
-    public function decode() {
-    }
-
     /**
      * Decompress file contents.
      *
@@ -177,7 +182,7 @@ class Adapter
 
         $destinationFile = $this->getTempFilename();
 
-        $this->exec(
+        $this->execOpenssl(
             'smime',
             [
                 '-decrypt',
@@ -212,7 +217,53 @@ class Adapter
         return $mimeType;
     }
 
-    public function encrypt() {
+    /**
+     * Encrypt a file.
+     *
+     * @param string $file The path to the file to encrypt
+     * @param string $cipher The encryption cipher to use.
+     * @return string Path to encrypted file
+     * @throws InvalidPartnerException
+     * @throws MessageEncryptionException
+     */
+    public function encrypt($file, $cipher=Partner::CRYPT_3DES) {
+        $certificate = null;
+
+        if (!$this->receivingPartner->getSecCertificate()) {
+            $certificate = $this->receivingPartner->getPublicCertFile();
+        }
+        else {
+            $certificate = $this->receivingPartner->getSecCertificateFile();
+        }
+
+        if (!$certificate || !is_file($certificate)) {
+            throw new InvalidPartnerException(
+                sprintf('Missing public certificate for partner %s', $this->receivingPartner->getId())
+            );
+        }
+
+        $returnValue = $this->getTempFilename();
+
+        $result = openssl_pkcs7_encrypt($file, $returnValue, file_get_contents($certificate), [], 0, OPENSSL_CIPHER_3DES);
+        if (!$result) {
+            throw new MessageEncryptionException('OpenSSL was unable to encrypt the file');
+        }
+
+        //return $returnValue;
+
+        $content = file_get_contents($returnValue);
+        $content = substr($content, strpos($content, "\n\n") + 2);
+        $content = base64_decode($content);
+
+        $headers = [
+            'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+            'Content-Disposition: attachment; filename="smime.p7m"',
+            'Content-Transfer-Encoding: binary'
+        ];
+
+        file_put_contents($returnValue, implode("\n", $headers) . "\n\n" . $content);
+
+        return $returnValue;
     }
 
     /**
@@ -230,7 +281,7 @@ class Adapter
      * ]
      * </pre>
      * @param bool $returnOutput
-     * @return array|null
+     * @return array|integer|null
      * @throws CommandExecutionException
      */
     public function exec($command, array $parameters=[], $returnOutput=false) {
@@ -238,6 +289,72 @@ class Adapter
             '%s -jar %s %s',
             $this->getJavaPath(),
             escapeshellarg($this->getJarPath()),
+            $command
+        );
+
+        $params = '';
+        foreach ($parameters as $key => $value) {
+            // Add preceding space to this parameter
+            $params .= ' ';
+
+            if (is_string($key)) {
+                $params .= sprintf('%s %s', $key, escapeshellarg($value));
+            }
+            else {
+                $params .= escapeshellarg($value);
+            }
+        }
+
+        if ($params) {
+            $command .= $params;
+        }
+
+        $output = [];
+        $exitCode = null;
+
+        exec($command, $output, $exitCode);
+        if ($exitCode) {
+            $message = sprintf(
+                'Unexpected error in command: %s',
+                $command
+            );
+            if ($output[0]) {
+                $message .= ' -- ' . $output[0];
+            }
+
+            throw new CommandExecutionException($message);
+        }
+
+        if ($returnOutput) {
+            return $output;
+        }
+
+        return $exitCode;
+    }
+
+    /**
+     * Execute a command via the OpenSSL.
+     *
+     * @param string $command The command to run with OpenSSL
+     * @param array $parameters Array of parameters for the command. Keys are options, values are values. Values are
+     *              automatically escaped. Values with non-string keys (i.e. integer keys) will not be escaped and are
+     *              passed through as-is. To get the parameter string "-in path/to/in.file -out path/to/out.file -flag"
+     *              pass the following:
+     * <pre>
+     * [
+     *   '-in' => 'path/to/in.file'
+     *   '-out' => 'path/to/out.file'
+     *   '-flag'
+     * ]
+     * </pre>
+     * @param bool $returnOutput
+     * @return array|integer|null
+     * @throws CommandExecutionException
+     */
+    public function execOpenssl($command, array $parameters=[], $returnOutput=false) {
+        $command = sprintf(
+            '%s %s',
+            $this->getOpensslPath(),
             $command
         );
 
@@ -318,15 +435,6 @@ class Adapter
     }
 
     /**
-     * Get directory where AS2Secure.jar file is located.
-     *
-     * @return string
-     */
-    public function getBinDir() {
-        return $this->binDir;
-    }
-
-    /**
      * Get path to `AS2Secure.jar` file
      *
      * @return string
@@ -374,8 +482,24 @@ class Adapter
         }
     }
 
+    /**
+     * Get path to OpenSSL
+     *
+     * @return string
+     */
+    public function getOpensslPath() {
+        return $this->opensslPath;
+    }
+
+    /**
+     * Get path to private directory
+     *
+     * @param null $path
+     *
+     * @return string
+     */
     public function getPrivateDir($path=null) {
-        $returnValue = $this->getTopDir() . 'private' . DIRECTORY_SEPARATOR;
+        $returnValue = $this->getTopDir() . '_private' . DIRECTORY_SEPARATOR;
         if ($path !== null) {
             $returnValue .= $path . DIRECTORY_SEPARATOR;
         }
@@ -388,7 +512,7 @@ class Adapter
      * @return string
      */
     public static function getServerSignature() {
-        return self::getSoftwareName() . ' // PHP/' . phpversion();
+        return self::getSoftwareName() . ' / PHP ' . PHP_VERSION;
     }
 
     /**
@@ -443,24 +567,19 @@ class Adapter
     }
 
     /**
-     * Set the path to the directory where `AS2Secure.jar` can be found. Default is composer `vendor/bin` directory.
-     *
-     * @param string $path Path to directory.
-     * @return $this
-     */
-    public function setBinDir($path) {
-        $this->binDir = realpath($path);
-        return $this;
-    }
-
-    /**
      * Set the path to the `AS2Secure.jar` file.
      *
      * @param string $path Path to file.
      * @return $this
+     * @throws InvalidPathException
      */
     public function setJarPath($path) {
         $this->jarPath = $path;
+        if (!is_file($this->jarPath)) {
+            throw new InvalidPathException(
+                sprintf('Path to AS2Secure jar file, "%s", does not resolve to a valid location.', $path)
+            );
+        }
         return $this;
     }
 
@@ -469,9 +588,32 @@ class Adapter
      *
      * @param string $path Path to `java` executable.
      * @return $this
+     * @throws InvalidPathException
      */
     public function setJavaPath($path) {
         $this->javaPath = realpath($path);
+        if (!is_file($this->javaPath)) {
+            throw new InvalidPathException(
+                sprintf('Path to java, "%s", does not resolve to a valid location.', $path)
+            );
+        }
+        return $this;
+    }
+
+    /**
+     * Set the path to Openssl
+     *
+     * @param $path
+     * @return $this
+     * @throws InvalidPathException
+     */
+    public function setOpensslPath($path) {
+        $this->opensslPath = realpath($path);
+        if (!is_file($this->opensslPath)) {
+            throw new InvalidPathException(
+                sprintf('Path to openssl, "%s", does not resolve to a valid location.', $path)
+            );
+        }
         return $this;
     }
 
@@ -520,7 +662,7 @@ class Adapter
         $parameters = [];
 
         if ($this->sendingPartner->getSecPkcs12Password()) {
-            $parameters['-password'] = $this->sendingPartner->getPkcs12Password();
+            $parameters['-password'] = $this->sendingPartner->getSecPkcs12Password();
         }
         else {
             $parameters[] = '-nopassword';

@@ -9,6 +9,6 @@
 
 namespace PHPAS2\Exception;
 
-class InvalidAdapterException extends \Exception
+class InvalidAdapterException extends AbstractException
 {
 }

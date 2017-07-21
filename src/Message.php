@@ -24,8 +24,6 @@ use PHPAS2\Message\MessageDispositionNotification;
  */
 class Message extends AbstractMessage
 {
-    /** @var HeaderCollection */
-    protected $headers;
     /** @var string|null */
     protected $micChecksum;
 
@@ -75,10 +73,9 @@ class Message extends AbstractMessage
             file_put_contents($tmpFile, $file);
             $file = $tmpFile;
         }
-        else {
-            if (!$filename) {
-                $filename = basename($file);
-            }
+
+        if (!$filename) {
+            $filename = basename($file);
         }
 
         if (!$mimeType) {
@@ -137,6 +134,9 @@ class Message extends AbstractMessage
                 $mimePart[] = $part;
             }
 
+            if ($mimePart->count() == 1) {
+                $mimePart = $mimePart->getPartByIndex(0);
+            }
             $file = $this->adapter->getTempFilename();
             file_put_contents($file, $mimePart->toString());
         }
@@ -167,7 +167,7 @@ class Message extends AbstractMessage
 
         if ($this->getReceivingPartner()->getSecEncryptionAlgorithm() != Partner::CRYPT_NONE) {
             try {
-                $file = $this->encrypt($file);
+                $file = $this->adapter->encrypt($file);
                 $this->isEncrypted = true;
             }
             catch (\Exception $e) {
@@ -177,8 +177,8 @@ class Message extends AbstractMessage
         }
 
         $this->path = $file;
-        $this->headers = new HeaderCollection();
-        $this->headers->addHeaders([
+        $this->headerCollection = new HeaderCollection();
+        $this->headerCollection->addHeaders([
             'AS2-From'                    => $this->getSendingPartner()->getId(true),
             'AS2-To'                      => $this->getReceivingPartner()->getId(true),
             'AS2-Version'                 => '1.0',
@@ -192,18 +192,21 @@ class Message extends AbstractMessage
         ]);
 
         if ($this->getReceivingPartner()->getMdnSigned()) {
-            $this->headers->addHeader(
+            $this->headerCollection->addHeader(
                 'Disposition-Notification-Options',
                 'signed-receipt-protocol=optional, pkcs7-signature; signed-receipt-micalg=optional, sha1'
             );
         }
 
-        if ($this->getReceivingPartner()->getMdnRequest()) {
-            $this->headers->addHeader('Receipt-Delivery-Option', $this->getSendingPartner()->getSendUrl());
+        if ($this->getReceivingPartner()->getMdnRequest() == Partner::MDN_ASYNC) {
+            $this->headerCollection->addHeader(
+                'Receipt-Delivery-Option',
+                $this->getSendingPartner()->getSendUrl()
+            );
         }
 
         $content = file_get_contents($this->path);
-        $this->headers->addHeadersFromMessage($content);
+        $this->headerCollection->addHeadersFromMessage($content);
 
         $mimePart = \Horde_Mime_Part::parseMessage($content);
         file_put_contents($this->path, $mimePart->getContents());
@@ -211,6 +214,13 @@ class Message extends AbstractMessage
         return $this;
     }
 
+    /**
+     * Generate an MDN for a message.
+     *
+     * @param null|\Exception $exception
+     *
+     * @return MessageDispositionNotification
+     */
     public function generateMDN($exception=null) {
         $mdn = new MessageDispositionNotification($this);
 

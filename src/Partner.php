@@ -213,7 +213,7 @@ class Partner
      * @return string
      */
     public function getId($enclosedWithQuotes=false) {
-        return sprintf('%1$s%s%1$s', ($enclosedWithQuotes ? '"' : ''), $this->id);
+        return sprintf('%s%s%1$s', ($enclosedWithQuotes ? '"' : ''), $this->id);
     }
 
     /**
@@ -294,15 +294,15 @@ class Partner
      * @return string
      */
     public function getPrivateKeyFile() {
-        return $this->_writeFile($this->getId() . '.key', $this->getPrivateKey());
+        return $this->_writeFile($this->getId() . '.key', file_get_contents($this->getPrivateKey()));
     }
 
     /**
-     * Get public key from PKCS12 bundle.
+     * Get public certificate from PKCS12 bundle.
      *
      * @return string
      */
-    public function getPublicKey() {
+    public function getPublicCert() {
         return $this->_getPkcs12Element('cert');
     }
 
@@ -311,8 +311,8 @@ class Partner
      *
      * @return mixed
      */
-    public function getPublicKeyFile() {
-        return $this->_writeFile($this->getId() . '.pub', $this->getPublicKey());
+    public function getPublicCertFile() {
+        return $this->_writeFile($this->getId() . '.pub', file_get_contents($this->getPublicCert()));
     }
 
     /**
@@ -330,7 +330,12 @@ class Partner
      * @return string
      */
     public function getSecCertificateFile() {
-        return $this->_writeFile($this->getId() . '.cer', $this->getSecCertificate());
+        if (is_file($this->secCertificate)) {
+            return $this->secCertificate;
+        }
+        else {
+            return $this->_writeFile($this->getId() . '.cer', $this->getSecCertificate());
+        }
     }
 
     /**
@@ -357,7 +362,12 @@ class Partner
      * @return string
      */
     public function getSecPkcs12File() {
-        return $this->_writeFile($this->getId() . '.p12', $this->getSecPkcs12());
+        if (is_file($this->getSecPkcs12())) {
+            return $this->getSecPkcs12();
+        }
+        else {
+            return $this->_writeFile($this->getId() . '.p12', $this->getSecPkcs12());
+        }
     }
 
     /**
@@ -652,7 +662,7 @@ class Partner
      */
     public function setSecCertificate($certificate) {
         if (is_file($certificate)) {
-            $this->secCertificate = file_get_contents($certificate);
+            $this->secCertificate = $certificate;
         }
         else if (mb_strlen(trim($certificate)) > 0) {
             $certInfo = openssl_x509_parse($certificate);
@@ -699,7 +709,7 @@ class Partner
      */
     public function setSecPkcs12($pkcs12) {
         if (is_file($pkcs12)) {
-            $this->secPkcs12 = file_get_contents($pkcs12);
+            $this->secPkcs12 = $pkcs12;
         }
         else if (strlen(trim($pkcs12))) {
             $bundle = [];
