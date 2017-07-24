@@ -15,6 +15,7 @@ use PHPAS2\Exception\UnencryptedMessageException;
 use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Message\AbstractMessage;
+use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
 
 /**
@@ -27,6 +28,36 @@ use PHPAS2\Message\MessageDispositionNotification;
  */
 class Request extends AbstractMessage
 {
+    public function __construct($content, $headers) {
+        if (!($headers instanceof HeaderCollection)) {
+            $headerCollection = new HeaderCollection();
+            $headerCollection->addHeaders($headers);
+            $headers = $headerCollection;
+        }
+
+        $this->headerCollection = $headers;
+        $mimeType = $this->headerCollection->getheader('content-type');
+
+        $mimeTypeSeparator = $pos = strpos($mimeType, ';');
+        if ($mimeTypeSeparator !== false) {
+            $mimeType = substr($mimeType, 0, $mimeTypeSeparator);
+        }
+        
+        $params = [
+            'partner_from' => $this->getHeaders()->getHeader('as2-from'),
+            'partner_to'   => $this->getHeaders()->getHeader('as2-to'),
+            'mimeType'     => $mimeType,
+            'is_file'      => false
+        ];
+        $e = new \Exception('test');
+        var_dumP($e->getTraceAsString());exit;
+
+        parent::__construct($content, $params);
+
+        $messageId = trim($this->getHeaders()->getHeader('message-id'), '<>');
+        $this->setMessageId($messageId);
+    }
+
     /**
      * Method not available
      *

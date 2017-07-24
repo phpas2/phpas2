@@ -91,8 +91,6 @@ class Client
             CURLOPT_HEADERFUNCTION => array($this->response, 'curlHeaderHandler')
         ]);
 
-        var_dump($this->request->getContents());exit;
-
         $auth = $request->getAuthentication();
         if ($auth->hasAuthentication()) {
             curl_setopt_array($ch, [
@@ -103,12 +101,15 @@ class Client
 
         $this->response->handle($ch);
 
+        // TODO: Determine if this is necessary here since Outgoing messages don't send MDNs, only incoming messages get an MDN
+        /*
         if (
-            $request instanceof AbstractMessage &&
+            $request instanceof Message &&
             $request->getReceivingPartner()->getMdnRequest() == Partner::MDN_SYNC
         ) {
             $this->response->sendMDN();
         }
+        */
 
         return $this;
     }

@@ -64,7 +64,7 @@ class Message extends AbstractMessage
      * @param string $mimeType Mime-type of the file contents
      * @param string $filename The filename of the file if $file is file contents
      * @param boolean $isFile Whether $file is a path to a file (true) or are file contents (false). Default: true.
-     * @param string $encoding Encoding of the file.
+     * @param string $encoding The encoding to use for transfer
      * @return $this
      */
     public function addFile($file, $mimeType='', $filename='', $isFile=true, $encoding='base64') {
@@ -125,8 +125,8 @@ class Message extends AbstractMessage
             $mimePart = new \Horde_Mime_Part('multipart/mixed');
             foreach ($this->getFiles() as $file) {
                 $part = new \Horde_Mime_Part($file['mimeType']);
-                $part->setContents(file_get_contents($file['path']));
                 $part->setName($file['filename']);
+                $part->setContents(file_get_contents($file['path']));
                 if ($file['encoding']) {
                     $part->setTransferEncoding($file['encoding']);
                 }
@@ -138,7 +138,7 @@ class Message extends AbstractMessage
                 $mimePart = $mimePart->getPartByIndex(0);
             }
             $file = $this->adapter->getTempFilename();
-            file_put_contents($file, $mimePart->toString());
+            file_put_contents($file, $mimePart->toString(['headers' => true]));
         }
         catch (\Exception $e) {
             $this->logger->log(
@@ -177,8 +177,9 @@ class Message extends AbstractMessage
         }
 
         $this->path = $file;
+        // Reinitialize $this->headerCollection
         $this->headerCollection = new HeaderCollection();
-        $this->headerCollection->addHeaders([
+        $this->getHeaders()->addHeaders([
             'AS2-From'                    => $this->getSendingPartner()->getId(true),
             'AS2-To'                      => $this->getReceivingPartner()->getId(true),
             'AS2-Version'                 => '1.0',
@@ -188,28 +189,33 @@ class Message extends AbstractMessage
             'Mime-Version'                => '1.0',
             'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl(),
             'Recipient-Address'           => $this->getReceivingPartner()->getSendUrl(),
-            'User-Agent'                  => Adapter::getSoftwareName()
+            'User-Agent'                  => Adapter::getSoftwareName(),
+            'Accept-Encoding'             => 'gzip, deflate',
+            'Content-Type'                => 'application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"'
         ]);
 
         if ($this->getReceivingPartner()->getMdnSigned()) {
-            $this->headerCollection->addHeader(
+            $this->getHeaders()->addHeader(
                 'Disposition-Notification-Options',
                 'signed-receipt-protocol=optional, pkcs7-signature; signed-receipt-micalg=optional, sha1'
             );
         }
 
         if ($this->getReceivingPartner()->getMdnRequest() == Partner::MDN_ASYNC) {
-            $this->headerCollection->addHeader(
+            $this->getHeaders()->addHeader(
                 'Receipt-Delivery-Option',
                 $this->getSendingPartner()->getSendUrl()
             );
         }
 
         $content = file_get_contents($this->path);
-        $this->headerCollection->addHeadersFromMessage($content);
+        $this->getHeaders()->addHeadersFromMessage($content);
 
-        $mimePart = \Horde_Mime_Part::parseMessage($content);
-        file_put_contents($this->path, $mimePart->getContents());
+        $headerSeparator = strpos($content, "\n\n");
+        if ($headerSeparator !== false) {
+            $content = substr($content, $headerSeparator + 2);
+        }
+        file_put_contents($this->path, base64_decode($content));
 
         return $this;
     }

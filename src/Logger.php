@@ -19,8 +19,9 @@ namespace PHPAS2;
  */
 class Logger
 {
-    const LEVEL_INFO = 'info';
-    const LEVEL_WARN = 'warn';
+    const LEVEL_DEBUG = 'debug';
+    const LEVEL_INFO  = 'info';
+    const LEVEL_WARN  = 'warn';
     const LEVEL_ERROR = 'error';
     const LEVEL_FATAL = 'fatal';
 
@@ -86,6 +87,6 @@ class Logger
      * Use Logger::getInstance() to get a new (or the current) instance of the logger class.
      */
     private function __construct() {
-        $this->setLogFilePath(realpath(dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . 'logs'));
+        $this->setLogFilePath(realpath(dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . '_logs') . DIRECTORY_SEPARATOR);
     }
 }

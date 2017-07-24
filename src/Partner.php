@@ -273,10 +273,15 @@ class Partner
     /**
      * Get path to directory containing partner configurations.
      *
+     * @param string|null $partnerId Partner ID
      * @return string
      */
-    public function getPartnerConfigsDir() {
-        return $this->partnerConfigDir . DIRECTORY_SEPARATOR;
+    public function getPartnerConfigsDir($partnerId=null) {
+        $returnValue = $this->partnerConfigDir;
+        if ($partnerId !== null) {
+            $returnValue .= $partnerId . DIRECTORY_SEPARATOR;
+        }
+        return $returnValue;
     }
 
     /**
@@ -357,16 +362,32 @@ class Partner
     }
 
     /**
+     * Get contents of PKCS12 bundle for use with openssl_pkcs12_* methods
+     *
+     *
+     * @return bool|string
+     */
+    public function getSecPkcs12Contents() {
+        if (ctype_print($this->secPkcs12) && is_file($this->secPkcs12)) {
+            return file_get_contents($this->secPkcs12);
+        }
+        else {
+            return $this->secPkcs12;
+        }
+    }
+
+    /**
      * Get path to PKCS12 bundle file.
      *
      * @return string
      */
     public function getSecPkcs12File() {
-        if (is_file($this->getSecPkcs12())) {
+        if (ctype_print($this->getSecPkcs12()) && is_file($this->getSecPkcs12())) {
             return $this->getSecPkcs12();
         }
         else {
-            return $this->_writeFile($this->getId() . '.p12', $this->getSecPkcs12());
+            $this->setSecPkcs12($this->_writeFile($this->getId() . '.p12', $this->getSecPkcs12()));
+            return $this->getSecPkcs12();
         }
     }
 
@@ -505,6 +526,11 @@ class Partner
         $data = array_merge($baseConfig, $data);
 
         foreach ($data as $key => $value) {
+            /* Because PKCS12 bundle may have a password necessary for reading */
+            if ($key == 'sec_pkcs12') {
+                continue;
+            }
+
             $methodName = 'set' . str_replace(
                 ' ',
                 '',
@@ -513,6 +539,8 @@ class Partner
 
             $this->$methodName($value);
         }
+
+        $this->setSecPkcs12($data['sec_pkcs12']);
 
         return $this;
     }
@@ -525,7 +553,8 @@ class Partner
      * @return $this
      */
     public function loadFromConfig($partnerID) {
-        $data = include($this->partnerConfigDir . $partnerID . DIRECTORY_SEPARATOR . 'config.php');
+        $partnerConfig = $this->getPartnerConfigsDir($partnerID) . 'config.php';
+        $data = include($partnerConfig);
 
         $this->loadFromArray($data);
         return $this;
@@ -708,17 +737,22 @@ class Partner
      * @throws Pkcs12BundleException
      */
     public function setSecPkcs12($pkcs12) {
+        $this->secPkcs12Contents = [];
+
         if (is_file($pkcs12)) {
             $this->secPkcs12 = $pkcs12;
+            $result = openssl_pkcs12_read($this->getSecPkcs12Contents(), $this->secPkcs12Contents, $this->getSecPkcs12Password());
+            if ($result === false) {
+                throw new Pkcs12BundleException(sprintf('Unable to read data from PKCS12 bundle "%s"', $pkcs12));
+            }
         }
         else if (strlen(trim($pkcs12))) {
-            $bundle = [];
-            $valid = openssl_pkcs12_read($pkcs12, $bundle, $this->getSecPkcs12Password());
+            $valid = openssl_pkcs12_read($pkcs12, $this->secPkcs12Contents, $this->getSecPkcs12Password());
             if (!$valid) {
                 throw new Pkcs12BundleException('Unable to verify PKCS12 bundle');
             }
             unset($bundle, $valid);
-            $this->secPkcs12 = $pkcs12;
+            $this->secPkcs12 = $this->_writeFile($this->getId() . '.p12', $pkcs12);
         }
         else {
             $this->secPkcs12 = null;
@@ -846,9 +880,15 @@ class Partner
      * @throws Pkcs12BundleException
      */
     protected function _getPkcs12Element($key) {
-        if (!$this->secPkcs12Contents) {
-            $this->secPkcs12Contents = [];
-            openssl_pkcs12_read($this->getSecPkcs12(), $this->getSecPkcas12Password());
+        if (empty($this->secPkcs12Contents)) {
+            $secPkcs12Contents = [];
+            $result = openssl_pkcs12_read($this->getSecPkcs12(), $secPkcs12Contents, $this->getSecPkcs12Password());
+            if ($result) {
+                $this->secPkcs12Contents = $secPkcs12Contents;
+            }
+            else {
+                throw new Pkcs12BundleException('Unable to read PKCS12 bundle');
+            }
         }
 
         if (!array_key_exists($key, $this->secPkcs12Contents)) {
@@ -856,7 +896,7 @@ class Partner
         }
 
         $destinationFile = $this->adapter->getTempFilename();
-        file_put_contents($this->secPkcs12Contents[$key]);
+        file_put_contents($destinationFile, $this->secPkcs12Contents[$key]);
 
         return $destinationFile;
     }
@@ -884,9 +924,7 @@ class Partner
         }
 
         if ($writeNewFile) {
-            $fp = fopen($filePath, 'w+b');
-            file_put_contents($fp, $contents);
-            @fclose($fp);
+            file_put_contents($filePath, $contents);
         }
 
         return $filePath;

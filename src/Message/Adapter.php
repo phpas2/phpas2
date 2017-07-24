@@ -17,6 +17,7 @@ use PHPAS2\Exception\MessageEncryptionException;
 use PHPAS2\Exception\NoFilesProvidedException;
 use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
+use PHPAS2\Logger;
 use PHPAS2\Partner;
 
 /**
@@ -168,11 +169,12 @@ class Adapter
     }
 
     /**
-     * Decrypt an encrypted message.
+     * Decrypt an incoming encrypted message.
      *
      * @param string $file Path to file.
      * @return bool|string
      * @throws Pkcs12BundleException
+     * @throws MessageEncryptionException
      */
     public function decrypt($file) {
         $privateKey = $this->receivingPartner->getPrivateKeyFile();
@@ -180,17 +182,14 @@ class Adapter
             throw new Pkcs12BundleException('Unable to extract private key from PKCS12 bundle');
         }
 
+        $cert = $this->receivingPartner->getPublicCert();
+
         $destinationFile = $this->getTempFilename();
 
-        $this->execOpenssl(
-            'smime',
-            [
-                '-decrypt',
-                '-in'    => $file,
-                '-inkey' => $privateKey,
-                '-out'   => $destinationFile
-            ]
-        );
+        $result = openssl_pkcs7_decrypt($file, $destinationFile, $cert, $privateKey);
+        if (!$result) {
+            throw new MessageEncryptionException('OpenSSL failed to decrypt the message');
+        }
 
         return $destinationFile;
     }
@@ -221,12 +220,12 @@ class Adapter
      * Encrypt a file.
      *
      * @param string $file The path to the file to encrypt
-     * @param string $cipher The encryption cipher to use.
+     * @param integer $cipher The encryption cipher to use (one of the OPENSSL_CIPHER_* constants).
      * @return string Path to encrypted file
      * @throws InvalidPartnerException
      * @throws MessageEncryptionException
      */
-    public function encrypt($file, $cipher=Partner::CRYPT_3DES) {
+    public function encrypt($file, $cipher=OPENSSL_CIPHER_3DES) {
         $certificate = null;
 
         if (!$this->receivingPartner->getSecCertificate()) {
@@ -244,24 +243,26 @@ class Adapter
 
         $returnValue = $this->getTempFilename();
 
-        $result = openssl_pkcs7_encrypt($file, $returnValue, file_get_contents($certificate), [], 0, OPENSSL_CIPHER_3DES);
+        $result = openssl_pkcs7_encrypt(
+            $file,
+            $returnValue,
+            file_get_contents($certificate),
+            [],
+            0,
+            $cipher
+        );
         if (!$result) {
             throw new MessageEncryptionException('OpenSSL was unable to encrypt the file');
         }
 
-        //return $returnValue;
+        /*
+         * This is necessary for Mendelson AS2 server.  They don't seem to like the "x-pkcs7-mime" content type.
+         * Will just keep it this way for all AS2 partners.
+         */
+        $contents = file_get_contents($returnValue);
+        $contents = str_replace('application/x-pkcs7-mime', 'application/pkcs7-mime', $contents);
 
-        $content = file_get_contents($returnValue);
-        $content = substr($content, strpos($content, "\n\n") + 2);
-        $content = base64_decode($content);
-
-        $headers = [
-            'Content-Type: application/x-pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
-            'Content-Disposition: attachment; filename="smime.p7m"',
-            'Content-Transfer-Encoding: binary'
-        ];
-
-        file_put_contents($returnValue, implode("\n", $headers) . "\n\n" . $content);
+        file_put_contents($returnValue, $contents);
 
         return $returnValue;
     }
@@ -312,73 +313,12 @@ class Adapter
         $output = [];
         $exitCode = null;
 
-        exec($command, $output, $exitCode);
-        if ($exitCode) {
-            $message = sprintf(
-                'Unexpected error in command: %s',
-                $command
-            );
-            if ($output[0]) {
-                $message .= ' -- ' . $output[0];
-            }
-
-            throw new CommandExecutionException($message);
-        }
-
-        if ($returnOutput) {
-            return $output;
-        }
-
-        return $exitCode;
-    }
-
-    /**
-     * Execute a command via the OpenSSL.
-     *
-     * @param string $command The command to run with OpenSSL
-     * @param array $parameters Array of parameters for the command. Keys are options, values are values. Values are
-     *              automatically escaped. Values with non-string keys (i.e. integer keys) will not be escaped and are
-     *              passed through as-is. To get the parameter string "-in path/to/in.file -out path/to/out.file -flag"
-     *              pass the following:
-     * <pre>
-     * [
-     *   '-in' => 'path/to/in.file'
-     *   '-out' => 'path/to/out.file'
-     *   '-flag'
-     * ]
-     * </pre>
-     * @param bool $returnOutput
-     * @return array|integer|null
-     * @throws CommandExecutionException
-     */
-    public function execOpenssl($command, array $parameters=[], $returnOutput=false) {
-        $command = sprintf(
-            '%s %s',
-            $this->getOpensslPath(),
-            $command
-        );
-
-        $params = '';
-        foreach ($parameters as $key => $value) {
-            // Add preceding space to this parameter
-            $params .= ' ';
-
-            if (is_string($key)) {
-                $params .= sprintf('%s %s', $key, escapeshellarg($value));
-            }
-            else {
-                $params .= escapeshellarg($value);
-            }
-        }
-
-        if ($params) {
-            $command .= $params;
-        }
-
-        $output = [];
-        $exitCode = null;
+        Logger::getInstance()->log(Logger::LEVEL_DEBUG, 'Executing: ' . $command);
 
         exec($command, $output, $exitCode);
+
+        Logger::getInstance()->log(Logger::LEVEL_DEBUG, 'Result (' . $exitCode . '): ' . implode("\n", $output));
+
         if ($exitCode) {
             $message = sprintf(
                 'Unexpected error in command: %s',

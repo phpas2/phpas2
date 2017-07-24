@@ -123,6 +123,13 @@ abstract class AbstractMessage
         return $this;
     }
 
+    /**
+     * Generate a unique message ID per RFC 4130 Section 5 Subsection 3.3.
+     *
+     * @param string $type
+     *
+     * @return string
+     */
     final public function generateMessageId($type=self::TYPE_SENDING) {
         try {
             switch ($type) {
@@ -142,13 +149,15 @@ abstract class AbstractMessage
             $partner = 'unknown';
         }
 
-        return sprintf(
-            '<%s@%s_%s_%s>',
-            uniqid('', true),
-            microtime(),
-            str_replace(' ', '', strtolower($partner)),
-            php_uname('n')
-        );
+        $returnValue = bin2hex(openssl_random_pseudo_bytes(16)) . '@';
+        $returnValue .= bin2hex(openssl_random_pseudo_bytes(32)) . '-'; // 98 characters long
+        $returnValue .= microtime() . '-' . $partner . '-' . php_uname('n');
+
+        $returnValue = str_replace(' ', '_', $returnValue);
+
+        $returnValue = '<' . substr($returnValue, 0, 253) . '>';
+
+        return $returnValue;
     }
 
     /**
