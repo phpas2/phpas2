@@ -10,8 +10,11 @@
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\InvalidMessageException;
+use PHPAS2\Exception\MDNFailure;
 use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Message;
+use PHPAS2\Request;
+use PHPAS2\Response;
 
 /**
  * Class MessageDispositionNotification
@@ -54,6 +57,25 @@ class MessageDispositionNotification extends AbstractMessage
             $this->setSendingPartner($params['sending_partner']);
             $this->setReceivingPartner($params['receiving_partner']);
         }
+        else if ($data instanceof Response) {
+            $headers = array_pop($data->getHeaders());
+            $this->setSendingPartner($headers['as2-from'])
+                ->setReceivingPartner($headers['as2-to'])
+                ->setPath($this->adapter->getTempFilename());
+
+            file_put_contents($this->getPath(), $data->getContent());
+            file_put_contents('/tmp/message.mdn', $data->getContent());
+
+            $this->decode();
+
+            $this->setMessageId($this->attributes->getHeader('original-message-id'));
+            
+            $disposition = $this->getAttribute('disposition');
+            $matches = [];
+            if (preg_match('/failed/Failure:(?<message>.*)/', $disposition, $matches)) {
+                throw new MDNFailure($matches['message']);
+            }
+        }
         else if ($data instanceof Request) {
             $this->setSendingPartner($data->getSendingPartner())
                 ->setReceivingPartner($data->getReceivingPartner())
@@ -78,7 +100,7 @@ class MessageDispositionNotification extends AbstractMessage
         }
         else {
             throw new InvalidMessageException(
-                'Unexpected message encountered. Expected Request, Message or Horde_Mime_Part'
+                'Unexpected message encountered. Expected Request, Response, Message or Horde_Mime_Part'
             );
         }
     }

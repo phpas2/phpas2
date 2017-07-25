@@ -12,6 +12,7 @@ namespace PHPAS2;
 use PHPAS2\Exception\InvalidMessageException;
 use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\Adapter;
+use PHPAS2\Message\MessageDispositionNotification;
 
 /**
  * Class Client
@@ -49,7 +50,7 @@ class Client
      *
      * @param AbstractMessage $request
      *
-     * @return $this
+     * @return $this|MessageDispositionNotification
      * @throws InvalidMessageException
      */
     public function sendRequest(AbstractMessage $request) {
@@ -100,16 +101,20 @@ class Client
         }
 
         $this->response->handle($ch);
+        $this->response->setRequest($request);
 
-        // TODO: Determine if this is necessary here since Outgoing messages don't send MDNs, only incoming messages get an MDN
         /*
+         * Outgoing message and result is a Message Disposition Notification (MDN).
+         */
         if (
             $request instanceof Message &&
-            $request->getReceivingPartner()->getMdnRequest() == Partner::MDN_SYNC
+            $request->getSendingPartner()->getIsLocal() &&
+            $request->getSendingPartner()->getMdnRequest() === Partner::MDN_SYNC
         ) {
-            $this->response->sendMDN();
+            return new MessageDispositionNotification(
+                $this->getResponse()
+            );
         }
-        */
 
         return $this;
     }

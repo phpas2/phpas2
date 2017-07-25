@@ -10,6 +10,7 @@
 namespace PHPAS2;
 
 use PHPAS2\Exception\HttpErrorResponseException;
+use PHPAS2\Message\AbstractMessage;
 
 /**
  * Class Response
@@ -27,6 +28,8 @@ class Response
     protected $index        = 0;
     protected $info;
     protected $mdnResponse;
+    /** @var  Request */
+    protected $request;
 
     /**
      * Get contents of response.
@@ -110,6 +113,15 @@ class Response
     }
 
     /**
+     * Get the original request object.
+     *
+     * @return Request
+     */
+    public function getRequest() {
+        return $this->request;
+    }
+
+    /**
      * Handle the configured cURL request and build a response object from it
      *
      * @param $ch
@@ -143,5 +155,17 @@ class Response
         $this->mdnResponse = new Request($this, $responseHeaders);
         $this->mdnResponse->getObject();
         $this->mdnResponse->decode();
+    }
+
+    /**
+     * Set the original request object for this response.
+     *
+     * @param AbstractMessage $request
+     *
+     * @return $this
+     */
+    public function setRequest(AbstractMessage $request) {
+        $this->request = $request;
+        return $this;
     }
 }

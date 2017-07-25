@@ -90,7 +90,7 @@ abstract class AbstractMessage
         if (is_array($data)) {
             $this->path = $data;
         }
-        else if ($data) {
+        else if (is_string($data)) {
             if (array_key_exists('is_file', $params) && $params['is_file'] === false) {
                 $file = $this->adapter->getTempFilename();
                 file_put_contents($file, $data);

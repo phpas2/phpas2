@@ -122,7 +122,8 @@ class Message extends AbstractMessage
         $this->setMessageId($messageId);
 
         try {
-            $mimePart = new \Horde_Mime_Part('multipart/mixed');
+            $mimePart = new \Horde_Mime_Part();
+            $mimePart->setType('multipart/mixed');
             foreach ($this->getFiles() as $file) {
                 $part = new \Horde_Mime_Part($file['mimeType']);
                 $part->setName($file['filename']);
