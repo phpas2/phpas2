@@ -183,7 +183,7 @@ class Message extends AbstractMessage
         $this->getHeaders()->addHeaders([
             'AS2-From'                    => $this->getSendingPartner()->getId(true),
             'AS2-To'                      => $this->getReceivingPartner()->getId(true),
-            'AS2-Version'                 => '1.0',
+            'AS2-Version'                 => '1.2',
             'From'                        => $this->getSendingPartner()->getEmail(),
             'Subject'                     => $this->getSendingPartner()->getSendSubject(),
             'Message-ID'                  => $this->getMessageId(),

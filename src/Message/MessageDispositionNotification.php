@@ -195,7 +195,7 @@ class MessageDispositionNotification extends AbstractMessage
         $this->setMessageId($this->generateMessageId($this->getSendingPartner()));
 
         $this->headerCollection->addHeaders([
-            'AS2-Version'  => '1.0',
+            'AS2-Version'  => '1.2',
             'Message-ID'   => $this->getMessageId(),
             'Mime-Version' => '1.0',
             'Server'       => Adapter::getServerSignature(),
