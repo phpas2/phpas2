@@ -212,6 +212,9 @@ class Message extends AbstractMessage
         $content = file_get_contents($this->path);
         $this->getHeaders()->addHeadersFromMessage($content);
 
+        /*
+         * Strip the S/MIME headers of the content since they're already in the message headers
+         */
         $headerSeparator = strpos($content, "\n\n");
         if ($headerSeparator !== false) {
             $content = substr($content, $headerSeparator + 2);
