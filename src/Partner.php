@@ -180,15 +180,6 @@ class Partner
     }
 
     /**
-     * Get Certificate Authority cert chain from PKCS12 bundle.
-     *
-     * @return string
-     */
-    public function getCA() {
-        return $this->_getPkcs12Element('extracerts');
-    }
-
-    /**
      * Get comment/notes about partner.
      *
      * @return string
@@ -204,6 +195,35 @@ class Partner
      */
     public function getEmail() {
         return $this->email;
+    }
+
+    /**
+     * Get the "ExtraCerts" from the PKCS12 bundle
+     *
+     * @return array
+     */
+    public function getExtraCerts() {
+        try {
+            return $this->_getPkcs12Element('extracerts');
+        }
+        catch (Pkcs12BundleException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get path to file with ExtraCerts certificate chain
+     *
+     * @return null|string
+     */
+    public function getExtraCertsFile() {
+        $certs = $this->getExtraCerts();
+        $fileContents = '';
+        if ($certs) {
+            $fileContents = implode("\n", $certs);
+        }
+
+        return $this->_writeFile($this->getId() . '.ca-chain', $fileContents);
     }
 
     /**
@@ -330,7 +350,7 @@ class Partner
     }
 
     /**
-     * Get path to the security certificate file from the PKCS12 bundle.
+     * Get path to the security certificate file for the provided public security certificate.
      *
      * @return string
      */
@@ -339,7 +359,8 @@ class Partner
             return $this->secCertificate;
         }
         else {
-            return $this->_writeFile($this->getId() . '.cer', $this->getSecCertificate());
+            $this->secCertificate = $this->_writeFile($this->getId() . '.cer', $this->getSecCertificate());
+            return $this->secCertificate;
         }
     }
 
@@ -350,6 +371,24 @@ class Partner
      */
     public function getSecEncryptionAlgorithm() {
         return $this->secEncryptionAlgorithm;
+    }
+
+    /**
+     * Get the PEM encoded Certificate and Private Key bundle
+     *
+     * @return string
+     */
+    public function getSecPem() {
+        return trim(file_get_contents($this->getPublicCertFile())) . PHP_EOL . trim(file_get_contents($this->getPrivateKeyFile()));
+    }
+
+    /**
+     * Get path to Certificate and Private Key PEM bundle file
+     *
+     * @return string
+     */
+    public function getSecPemFile() {
+        return $this->_writeFile($this->getId() . '.pem', $this->getSecPem());
     }
 
     /**
@@ -741,7 +780,11 @@ class Partner
 
         if (is_file($pkcs12)) {
             $this->secPkcs12 = $pkcs12;
-            $result = openssl_pkcs12_read($this->getSecPkcs12Contents(), $this->secPkcs12Contents, $this->getSecPkcs12Password());
+            $result = openssl_pkcs12_read(
+                $this->getSecPkcs12Contents(),
+                $this->secPkcs12Contents,
+                $this->getSecPkcs12Password()
+            );
             if ($result === false) {
                 throw new Pkcs12BundleException(sprintf('Unable to read data from PKCS12 bundle "%s"', $pkcs12));
             }
