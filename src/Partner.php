@@ -319,7 +319,10 @@ class Partner
      * @return string
      */
     public function getPrivateKeyFile() {
-        return $this->_writeFile($this->getId() . '.key', file_get_contents($this->getPrivateKey()));
+        return $this->_writeFile(
+            $this->getId() . '.key',
+            trim(file_get_contents($this->getPrivateKey()))
+        );
     }
 
     /**
@@ -337,7 +340,7 @@ class Partner
      * @return mixed
      */
     public function getPublicCertFile() {
-        return $this->_writeFile($this->getId() . '.pub', file_get_contents($this->getPublicCert()));
+        return $this->_writeFile($this->getId() . '.pub', trim(file_get_contents($this->getPublicCert())));
     }
 
     /**

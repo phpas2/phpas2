@@ -17,8 +17,13 @@ use PHPAS2\Exception\MessageEncryptionException;
 use PHPAS2\Exception\NoFilesProvidedException;
 use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
+use PHPAS2\Exception\UnsignedMdnException;
+use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Logger;
 use PHPAS2\Partner;
+use Zend\Mime\Message;
+use Zend\Mime\Mime;
+use Zend\Mime\Part as MimePart;
 
 /**
  * Class Adapter
@@ -137,6 +142,50 @@ class Adapter
     public function compress($file) {
         $destinationFile = $this->getTempFilename();
 
+        /*
+        $originalMimePart = \Horde_Mime_Part::parseMessage(file_get_contents($file));
+        $originalMimePart->addMimeHeaders();
+        ldd($originalMimePart->toString(['headers' => true, 'encode' => \Horde_Mime_Part::ENCODE_BINARY]));
+
+        $compressed = gzcompress($originalMimePart->toString(['headers' => true]), -1, ZLIB_ENCODING_DEFLATE);
+
+        $zlib = new \Horde_Compress_Fast_Zlib();
+        $compressed = $zlib->compress(file_get_contents($file));
+        */
+
+        $compressed = gzcompress(file_get_contents($file));
+
+        $part = new MimePart();
+        $part->setDescription('S/MIME Compressed Message');
+        $part->setDisposition(Mime::DISPOSITION_ATTACHMENT);
+        $part->setFileName('smime.p7z');
+        $part->setType('application/pkcs7-mime; smime-type="compressed-data"; name="smime.p7z"');
+        $part->setEncoding('binary');
+        $part->setContent($compressed);
+
+        /*
+        $mimePart = new \Horde_Mime_Part();
+        $mimePart->setType('application/pkcs7-mime');
+        $mimePart->setName('smime.p7z');
+        $mimePart->setContentTypeParameter('smime-type', 'compressed-data');
+        $mimePart->setDisposition('attachment; filename="smime.p7z"');
+        $mimePart->setDescription('S/MIME Compressed Message');
+        $mimePart->setTransferEncoding('binary', ['send' => true]);
+        $mimePart->setContents($compressed);
+        */
+
+
+        //file_put_contents($destinationFile, $mimePart->toString(['headers' => true]));
+        file_put_contents($destinationFile, $part->getHeaders() . "\n\n" . $part->getContent());
+
+        #echo '<pre>' . $mimePart->toString(['headers' => true]) . '</pre><hr />';exit;
+
+        // $newMimePart = \Horde_Mime_Part::parseMessage(file_get_contents($destinationFile));
+        // echo '<pre>' . gzuncompress($newMimePart->getContents()) . '</pre>';exit;
+
+        return $destinationFile;
+
+        /*
         $this->exec(
             'compress',
             [
@@ -145,7 +194,10 @@ class Adapter
             ]
         );
 
+        //echo '<pre>' . file_get_contents($destinationFile) . '</pre>';exit;
+
         return $destinationFile;
+        */
     }
 
     /**
@@ -472,7 +524,7 @@ class Adapter
     public function getTempFilename() {
         if (is_null(self::$tmpFiles)) {
             self::$tmpFiles = [];
-            register_shutdown_function(array($this, 'deleteTempFiles'));
+            //register_shutdown_function(array($this, 'deleteTempFiles'));
         }
 
         $filename = tempnam(sys_get_temp_dir(), 'as2file_');
@@ -593,6 +645,7 @@ class Adapter
      * @param string $encoding
      * @return bool|string
      * @throws Pkcs12BundleException
+     * @throws UnsignedMessageException
      */
     public function sign($file, $useZlib=false, $encoding='base64') {
         if (!$this->sendingPartner->getSecPkcs12()) {
@@ -601,6 +654,40 @@ class Adapter
 
         $parameters = [];
 
+        if ($useZlib) {
+            //$parameters[] = '-compress';
+            $file = $this->compress($file);
+        }
+
+        $destinationFile = $this->getTempFilename();
+
+        if ($this->sendingPartner->getExtraCerts() !== null) {
+            $result = openssl_pkcs7_sign(
+                $file,
+                $destinationFile,
+                'file://' . $this->sendingPartner->getPublicCertFile(),
+                'file://' . $this->sendingPartner->getPrivateKeyFile(),
+                [],
+                PKCS7_BINARY | PKCS7_DETACHED,
+                $this->sendingPartner->getExtraCertsFile()
+            );
+        }
+        else {
+            $result = openssl_pkcs7_sign(
+                $file,
+                $destinationFile,
+                'file://' . $this->sendingPartner->getPublicCertFile(),
+                'file://' . $this->sendingPartner->getPrivateKeyFile(),
+                [],
+                PKCS7_BINARY | PKCS7_DETACHED
+            );
+        }
+
+        if (!$result) {
+            throw new UnsignedMessageException('Failed to sign message: "' . openssl_error_string() . '"');
+        }
+
+        /*
         if ($this->sendingPartner->getSecPkcs12Password()) {
             $parameters['-password'] = $this->sendingPartner->getSecPkcs12Password();
         }
@@ -608,15 +695,8 @@ class Adapter
             $parameters[] = '-nopassword';
         }
 
-        if ($useZlib) {
-            $parameters[] = '-compress';
-        }
-
-        $pkcs12bundle = $this->sendingPartner->getSecPkcs12File();
-        $destinationFile = $this->getTempFilename();
-
-        $parameters['-pkcs12']   = $pkcs12bundle;
-        $parameters['-encoding'] = $encoding;
+        $parameters['-pkcs12']   = $this->sendingPartner->getSecPkcs12File();
+        // $parameters['-encoding'] = $encoding;
         $parameters['-in']       = $file;
         $parameters['-out']      = $destinationFile;
 
@@ -624,6 +704,7 @@ class Adapter
             'sign',
             $parameters
         );
+        */
 
         return $destinationFile;
     }
