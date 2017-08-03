@@ -24,6 +24,7 @@ use PHPAS2\Partner;
 use Zend\Mime\Message;
 use Zend\Mime\Mime;
 use Zend\Mime\Part as MimePart;
+use Zend\Mime\Part;
 
 /**
  * Class Adapter
@@ -106,31 +107,15 @@ class Adapter
      * Compose a new message
      *
      * @param array $files Array of paths to files.
-     * @return bool|string
+     * @return $this
      * @throws NoFilesProvidedException
      */
     public function compose(array $files) {
-        if (!is_array($files) || !count($files)) {
-            throw new NoFilesProvidedException('At least one file must be provided');
-        }
-
-        $parameters = [];
-        foreach ($files as $file) {
-            $parameters[] = sprintf(
-                ' -file %s -mimetype %s -name %s',
-                escapeshellarg($file['path']),
-                escapeshellarg($file['mimeType']),
-                escapeshellarg($file['filename'])
-            );
-        }
-
-        $destinationFile = $this->getTempFilename();
-
-        $parameters['-out'] = $destinationFile;
-
-        $this->exec('compose', $parameters);
-
-        return $destinationFile;
+        /**
+         * While inspecting the AS2Secure.jar file, it appears nothing is done with the file(s) during the "compose"
+         * action. So a call to self::compose may no longer be necessary.
+         */
+        return $this;
     }
 
     /**
@@ -209,13 +194,12 @@ class Adapter
     public function decompress($file) {
         $destinationFile = $this->getTempFilename();
 
-        $this->exec(
-            'decompress',
-            [
-                '-in'  => $file,
-                '-out' => $destinationFile
-            ]
-        );
+        $message = Message::createFromMessage(file_get_contents($file));
+        $part = $message->getParts()[0];
+
+        $uncompressed = gzuncompress($part);
+
+        file_put_contents($destinationFile, $uncompressed);
 
         return $destinationFile;
     }
@@ -398,29 +382,32 @@ class Adapter
      * @throws InvalidDataStructureException
      */
     public function extract($file) {
-        $destinationFile = $this->getTempFilename();
-
-        $results = $this->exec('extract', ['-in' => $file, '-out' => $destinationFile], true);
-
         $files = [];
-        foreach ($results as $result) {
-            $tmp = explode(';', $result);
-            if (count($tmp) <= 1) {
-                continue;
-            }
-            else if (count($tmp) != 3) {
-                throw new InvalidDataStructureException('Unexpected data structure while extracting message');
-            }
 
-            $file = [
-                'path' => trim($tmp[0], '"'),
-                'mimeType' => trim($tmp[1], '"'),
-                'filename' => trim($tmp[2], '"')
+        $message = Message::createFromMessage(file_get_contents($file));
+        if ($message->isMultiPart()) {
+            foreach ($message->getParts() as $part) {
+                $destinationFile = $this->getTempFilename();
+
+                file_put_contents($destinationFile, $part->getContent());
+
+                $files[] = [
+                    'path' => $destinationFile,
+                    'mimeType' => $part->getType(),
+                    'filename' => $part->getFileName()
+                ];
+            }
+        }
+        else {
+            $destinationFile = $this->getTempFilename();
+
+            $part = $message->getParts()[0];
+
+            $files[] = [
+                'path' => $destinationFile,
+                'mimeType' => $part->getType(),
+                'filename' => $part->getFileName()
             ];
-
-            $files[] = $file;
-
-            $this->addTempFileForDelete($file['path']);
         }
 
         return $files;
@@ -465,13 +452,19 @@ class Adapter
      * @return bool|string
      */
     public function getMicChecksum($file) {
-        try {
-            $result = $this->exec('checksum', ['-in' => $file, ' 2>/dev/null'], true);
-            return $result[0];
-        }
-        catch (\Exception $e) {
-            return false;
-        }
+        $message = Message::createFromMessage(file_get_contents($file));
+
+        $content = $message->getPartContent(1);
+        $signature = $message->getPartContent(2);
+
+        $asn1 = new File_ASN1();
+        $decoded = $asn1->decodeBER(base64_decode($signature));
+
+        // TODO: Inspect PHPSecLib to determine what the array looks like.
+
+        $algorithm = 'SHA256';
+
+        return openssl_digest($content, $algorithm, false);
     }
 
     /**
@@ -524,7 +517,7 @@ class Adapter
     public function getTempFilename() {
         if (is_null(self::$tmpFiles)) {
             self::$tmpFiles = [];
-            //register_shutdown_function(array($this, 'deleteTempFiles'));
+            register_shutdown_function(array($this, 'deleteTempFiles'));
         }
 
         $filename = tempnam(sys_get_temp_dir(), 'as2file_');

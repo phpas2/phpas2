@@ -28,7 +28,8 @@
     "pear-pear.horde.org/Horde_Util": "~2.5.8",
     "pear-pear.php.net/Mail_mimeDecode": "~1.5.6",
     "zendframework/zend-mail": "^2.8",
-    "zendframework/zend-mime": "^2.6"
+    "zendframework/zend-mime": "^2.6",
+    "phpseclib/phpseclib": "~2.0.6"
   },
   "autoload": {
     "psr-4": { "PHPAS2\\": "src/" }
