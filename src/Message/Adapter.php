@@ -11,6 +11,7 @@ namespace PHPAS2\Message;
 
 use PHPAS2\Exception\CommandExecutionException;
 use PHPAS2\Exception\InvalidDataStructureException;
+use PHPAS2\Exception\InvalidMessageException;
 use PHPAS2\Exception\InvalidPartnerException;
 use PHPAS2\Exception\InvalidPathException;
 use PHPAS2\Exception\MessageEncryptionException;
@@ -19,8 +20,10 @@ use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
 use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Exception\UnsignedMessageException;
+use PHPAS2\Exception\UnverifiedMessageException;
 use PHPAS2\Logger;
 use PHPAS2\Partner;
+use phpseclib\File\ASN1;
 use Zend\Mime\Message;
 use Zend\Mime\Mime;
 use Zend\Mime\Part as MimePart;
@@ -457,7 +460,7 @@ class Adapter
         $content = $message->getPartContent(1);
         $signature = $message->getPartContent(2);
 
-        $asn1 = new File_ASN1();
+        $asn1 = new ASN1();
         $decoded = $asn1->decodeBER(base64_decode($signature));
 
         // TODO: Inspect PHPSecLib to determine what the array looks like.
@@ -707,8 +710,22 @@ class Adapter
      *
      * @param string $file Path to file.
      * @return bool|string
+     * @throws InvalidMessageException
+     * @throws UnverifiedMessageException
      */
     public function verify($file) {
+        $destinationFile = $this->getTempFilename();
+
+        $result = openss_pkcs7_verify($file, PKCS7_BINARY|PKCS7_DETACHED, $destinationFile);
+
+        if ($result === -1) {
+            throw new UnverifiedMessageException('Error while verifying message: "' . openssl_error_string() . '"');
+        }
+        else if ($result === false ) {
+            throw new InvalidMessageException('Message verification failed.');
+        }
+
+        /*
         $parameters = [];
         if ($this->sendingPartner->getSecPkcs12()) {
             $parameters['-pkcs12'] = $this->sendingPartner->getSecPkcs12File();
@@ -720,8 +737,6 @@ class Adapter
             $parameters['-cert'] = $this->sendingPartner->getSecCertificateFile();
         }
 
-        $destinationFile = $this->getTempFilename();
-
         $parameters['-in']  = $file;
         $parameters['-out'] = $destinationFile;
         $parameters[] = '> /dev/null 2&1';
@@ -730,6 +745,7 @@ class Adapter
             'verify',
             $parameters
         );
+        */
 
         return $destinationFile;
     }
