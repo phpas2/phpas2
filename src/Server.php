@@ -11,6 +11,7 @@ namespace PHPAS2;
 
 use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
+use PHPAS2\Exception\InvalidMessageException;
 
 /**
  * Class Server

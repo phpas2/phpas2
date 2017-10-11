@@ -15,7 +15,7 @@ return [
     'id'                       => 'phpas2test',
     'email'                    => 'contact@phpas2.com',
     'comment'                  => 'Test AS2 endpoint powered by PHPAS2',
-    'is_local'                 => true,
+    'is_local'                 => false,
     'name'                     => 'PHPAS2 Test',
     'mdn_authentication'       => new Partner\Authentication(),
     'mdn_request'              => Partner::MDN_SYNC,
