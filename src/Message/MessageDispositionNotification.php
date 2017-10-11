@@ -15,6 +15,7 @@ use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Message;
 use PHPAS2\Request;
 use PHPAS2\Response;
+use Zend\Mime\Message as MimeMessage;
 
 /**
  * Class MessageDispositionNotification
@@ -120,24 +121,21 @@ class MessageDispositionNotification extends AbstractMessage
      * @return $this
      */
     public function decode() {
-        $decoder = new \Mail_mimeDecode(file_get_contents($this->getPath()));
-        $structure = $decoder->decode([
-            'include_bodies' => true,
-            'decode_headers' => true,
-            'decode_bodies'  => true,
-            'input'          => false,
-            'crlf'           => "\n"
-        ]);
+        $boundary = $this->adapter->parseMessageBoundary($this->getPath());
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
 
         $this->setMessage('');
         $this->attributes = null;
 
-        foreach ($structure->parts as $num => $part) {
-            if (strtolower($part->headers['content-type']) == 'message/disposition-notification') {
-                $this->attributes = $this->headerCollection->parseContent($part->body);
+        foreach ($message->getParts() as $num => $part) {
+            if (strtolower($part->type) == 'message/disposition-notification') {
+                $this->attributes = new HeaderCollection();
+                foreach ($part->getHeadersArray() as $header) {
+                    $this->attributes->addHeader($header[0], $header[1]);
+                }
             }
             else {
-                $this->setMessage(trim($part->body));
+                $this->setMessage(trim($part->getContent()));
             }
         }
 

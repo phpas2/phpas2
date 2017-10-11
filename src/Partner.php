@@ -53,7 +53,6 @@ class Partner
     const SIGN_NONE   = 'none';
     const SIGN_MD5    = 'md5';
     const SIGN_SHA1   = 'sha1';
-    // TODO: Verify implemntation of sha256 and up in JAR file
     const SIGN_SHA256 = 'sha256';
     const SIGN_SHA384 = 'sha384';
     const SIGN_SHA512 = 'sha512';

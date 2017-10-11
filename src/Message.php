@@ -13,6 +13,9 @@ use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
+use Zend\Mime\Message as MimeMessage;
+use Zend\Mime\Mime;
+use Zend\Mime\Part;
 
 /**
  * Class Message
@@ -24,8 +27,10 @@ use PHPAS2\Message\MessageDispositionNotification;
  */
 class Message extends AbstractMessage
 {
-    /** @var string|null */
+    /** @var string|null Message MIC checksum */
     protected $micChecksum;
+    /** @var bool|string Path to message on filesystem */
+    protected $path;
 
     /**
      * Message constructor.
@@ -38,6 +43,10 @@ class Message extends AbstractMessage
 
         if ($data instanceof Request) {
             $this->path = $data->getPath();
+        }
+        else if ($data instanceof MimeMessage) {
+            $this->path = $this->adapter->getTempFilename();
+            file_put_contents($this->path, $data->generateMessage());
         }
         else if ($data instanceof \Horde_Mime_Part) {
             $this->path = $this->adapter->getTempFilename();
@@ -122,24 +131,30 @@ class Message extends AbstractMessage
         $this->setMessageId($messageId);
 
         try {
-            $mimePart = new \Horde_Mime_Part();
-            $mimePart->setType('multipart/mixed');
+            $mimePart = new MimeMessage();
             foreach ($this->getFiles() as $file) {
-                $part = new \Horde_Mime_Part($file['mimeType']);
-                $part->setName($file['filename']);
-                $part->setContents(file_get_contents($file['path']));
+                $part = new Part();
+                $part->setType($file['mimeType'])
+                    ->setFileName($file['filename'])
+                    ->setContent(file_get_contents($file['path']));
                 if ($file['encoding']) {
-                    $part->setTransferEncoding($file['encoding']);
+                    $part->setEncoding($file['encoding']);
                 }
 
-                $mimePart[] = $part;
+                $mimePart->addPart($part);
             }
 
-            if ($mimePart->count() == 1) {
-                $mimePart = $mimePart->getPartByIndex(0);
+            if (!$mimePart->isMultiPart()) {
+                $messageContent = $mimePart->getPartHeaders(0) . Mime::LINEEND . Mime::LINEEND;
+                $messageContent .= $mimePart->getPartContent(0);
             }
+            else {
+                $messageContent = $mimePart->generateMessage();
+            }
+
             $file = $this->adapter->getTempFilename();
-            file_put_contents($file, $mimePart->toString(['headers' => true]));
+
+            file_put_contents($file, $messageContent);
         }
         catch (\Exception $e) {
             $this->logger->log(
@@ -150,15 +165,14 @@ class Message extends AbstractMessage
             throw $e;
         }
 
-        if ($this->getReceivingPartner()->getSecSignatureAlgorithm() != Partner::SIGN_NONE) {
+        if ($this->getReceivingPartner()->getSecSignatureAlgorithm() !== Partner::SIGN_NONE) {
             try {
                 $file = $this->adapter->sign(
                     $file,
-                    $this->getReceivingPartner()->getSendCompress(),
-                    $this->getReceivingPartner()->getSendEncoding()
+                    $this->getReceivingPartner()->getSendCompress()
                 );
                 $this->isSigned = true;
-                $this->micChecksum = $this->adapter->getMicChecksum($file);
+                // $this->micChecksum = $this->adapter->getMicChecksum($file);
             }
             catch (\Exception $e) {
                 $this->logger->log(Logger::LEVEL_ERROR, $e->getMessage(), $this->getMessageId());
@@ -166,7 +180,7 @@ class Message extends AbstractMessage
             }
         }
 
-        if ($this->getReceivingPartner()->getSecEncryptionAlgorithm() != Partner::CRYPT_NONE) {
+        if ($this->getReceivingPartner()->getSecEncryptionAlgorithm() !== Partner::CRYPT_NONE) {
             try {
                 $file = $this->adapter->encrypt($file);
                 $this->isEncrypted = true;
@@ -191,8 +205,7 @@ class Message extends AbstractMessage
             'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl(),
             'Recipient-Address'           => $this->getReceivingPartner()->getSendUrl(),
             'User-Agent'                  => Adapter::getSoftwareName(),
-            'Accept-Encoding'             => 'gzip, deflate',
-            'Content-Type'                => 'application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"'
+            'Accept-Encoding'             => 'gzip, deflate'
         ]);
 
         if ($this->getReceivingPartner()->getMdnSigned()) {
@@ -219,6 +232,7 @@ class Message extends AbstractMessage
         if ($headerSeparator !== false) {
             $content = substr($content, $headerSeparator + 2);
         }
+
         file_put_contents($this->path, base64_decode($content));
 
         return $this;

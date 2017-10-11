@@ -14,11 +14,12 @@ use PHPAS2\Exception\InvalidDataStructureException;
 use PHPAS2\Exception\InvalidMessageException;
 use PHPAS2\Exception\InvalidPartnerException;
 use PHPAS2\Exception\InvalidPathException;
+use PHPAS2\Exception\InvalidSignatureAlgorithmException;
 use PHPAS2\Exception\MessageEncryptionException;
+use PHPAS2\Exception\MimeMessageException;
 use PHPAS2\Exception\NoFilesProvidedException;
 use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
-use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Exception\UnverifiedMessageException;
 use PHPAS2\Logger;
@@ -27,7 +28,6 @@ use phpseclib\File\ASN1;
 use Zend\Mime\Message;
 use Zend\Mime\Mime;
 use Zend\Mime\Part as MimePart;
-use Zend\Mime\Part;
 
 /**
  * Class Adapter
@@ -48,6 +48,8 @@ class Adapter
     protected $jarPath;
     /** @var string */
     protected $javaPath;
+    /** @var string */
+    protected $micAlgorithm;
     /** @var string */
     protected $opensslPath;
     /** @var Partner */
@@ -167,9 +169,6 @@ class Adapter
         file_put_contents($destinationFile, $part->getHeaders() . "\n\n" . $part->getContent());
 
         #echo '<pre>' . $mimePart->toString(['headers' => true]) . '</pre><hr />';exit;
-
-        // $newMimePart = \Horde_Mime_Part::parseMessage(file_get_contents($destinationFile));
-        // echo '<pre>' . gzuncompress($newMimePart->getContents()) . '</pre>';exit;
 
         return $destinationFile;
 
@@ -417,6 +416,60 @@ class Adapter
     }
 
     /**
+     * Given an OID string, provide the friendly algorithm name
+     *
+     * @param string $oid
+     *
+     * @return string
+     * @throws InvalidSignatureAlgorithmException
+     */
+    public function getAlgorithmNameFromOid($oid) {
+        $algorithms = [
+            '1.2.840.113549.2.5'      => 'md5',
+            '1.3.14.3.2.26'           => 'sha1',
+            '2.16.840.1.101.3.4.1'    => 'aes',
+            '2.16.840.1.101.3.4.1.1'  => 'aes-128-ecb',
+            '2.16.840.1.101.3.4.1.2'  => 'aes-128-cbc',
+            '2.16.840.1.101.3.4.1.3'  => 'aes-128-ofb',
+            '2.16.840.1.101.3.4.1.4'  => 'aes-128-cfb',
+            '2.16.840.1.101.3.4.1.5'  => 'id-aes128-wrap',
+            '2.16.840.1.101.3.4.1.6'  => 'aes-128-gcm',
+            '2.16.840.1.101.3.4.1.7'  => 'aes-128-ccm',
+            '2.16.840.1.101.3.4.1.8'  => 'id-aes128-wrap-pad',
+            '2.16.840.1.101.3.4.1.21' => 'aes-192-ecb',
+            '2.16.840.1.101.3.4.1.22' => 'aes-192-cbc',
+            '2.16.840.1.101.3.4.1.23' => 'aes-192-ofb',
+            '2.16.840.1.101.3.4.1.24' => 'aes-192-cfb',
+            '2.16.840.1.101.3.4.1.25' => 'id-aes192-wrap',
+            '2.16.840.1.101.3.4.1.26' => 'aes-192-gcm',
+            '2.16.840.1.101.3.4.1.27' => 'aes-192-ccm',
+            '2.16.840.1.101.3.4.1.28' => 'id-aes192-wrap-pad',
+            '2.16.840.1.101.3.4.1.41' => 'aes-256-ecb',
+            '2.16.840.1.101.3.4.1.42' => 'aes-256-cbc',
+            '2.16.840.1.101.3.4.1.43' => 'aes-256-ofb',
+            '2.16.840.1.101.3.4.1.44' => 'aes-256-cfb',
+            '2.16.840.1.101.3.4.1.45' => 'id-aes256-wrap',
+            '2.16.840.1.101.3.4.1.46' => 'aes-256-gcm',
+            '2.16.840.1.101.3.4.1.47' => 'aes-256-ccm',
+            '2.16.840.1.101.3.4.1.48' => 'id-aes256-wrap-pad',
+            '2.16.840.1.101.3.4.2'    => 'nist_hashalgs',
+            '2.16.840.1.101.3.4.2.1'  => 'sha256',
+            '2.16.840.1.101.3.4.2.2'  => 'sha384',
+            '2.16.840.1.101.3.4.2.3'  => 'sha512',
+            '2.16.840.1.101.3.4.2.4'  => 'sha224',
+            '2.16.840.1.101.3.4.3'    => 'dsa_with_sha2',
+            '2.16.840.1.101.3.4.3.1'  => 'dsa_with_SHA224',
+            '2.16.840.1.101.3.4.3.2'  => 'dsa_with_SHA256'
+        ];
+
+        if (!array_key_exists($oid, $algorithms)) {
+            throw new InvalidSignatureAlgorithmException(sprintf('Unknown algorithm OID "%s"', $oid));
+        }
+
+        return $algorithms[$oid];
+    }
+
+    /**
      * Get path to `AS2Secure.jar` file
      *
      * @return string
@@ -449,25 +502,58 @@ class Adapter
     }
 
     /**
+     * Get the MIC Algorithm used with the message
+     *
+     * @return string
+     */
+    public function getMicAlgorithm() {
+        return $this->micAlgorithm;
+    }
+
+    /**
      * Calculate the MIC Checksum of a file.
      *
      * @param string $file Path to file.
      * @return bool|string
+     * @throws UnsignedMessageException|InvalidSignatureAlgorithmException
      */
     public function getMicChecksum($file) {
-        $message = Message::createFromMessage(file_get_contents($file));
+        $boundary = $this->parseMessageBoundary($file);
 
-        $content = $message->getPartContent(1);
-        $signature = $message->getPartContent(2);
+        $message = Message::createFromMessage(file_get_contents($file), $boundary);
+
+        $content = $message->getPartContent(0);
+        $signature = $message->getPartContent(1);
 
         $asn1 = new ASN1();
         $decoded = $asn1->decodeBER(base64_decode($signature));
 
-        // TODO: Inspect PHPSecLib to determine what the array looks like.
+        $mapping = [
+            'type' => ASN1::TYPE_OBJECT_IDENTIFIER,
+            'explicit' => true
+        ];
 
-        $algorithm = 'SHA256';
+        $mapped = $asn1->asn1map($decoded[0], $mapping);
 
-        return openssl_digest($content, $algorithm, false);
+        // We need PKCS7 Signed Data
+        if ($mapped !== '1.2.840.113549.1.7.2') {
+            throw new UnsignedMessageException('Message is not PKCS7 signed message');
+        }
+
+        // Signature algorithms should be one of nistAlgorithms
+        $signatureOid = $asn1->asn1map($decoded[0]['content'][1]['content'][0]['content'][1]['content'][0], $mapping);
+        if (substr($signatureOid, 0, 18) !== '2.16.840.1.101.3.4') {
+            throw new InvalidSignatureAlgorithmException('Unknown algorithm OID');
+        }
+
+        $algorithm = $this->getAlgorithmNameFromOid($signatureOid);
+        $this->micAlgorithm = $algorithm;
+
+        return sprintf(
+            '%s, %s',
+            base64_encode(openssl_digest($content, $algorithm, true)),
+            $algorithm
+        );
     }
 
     /**
@@ -555,6 +641,36 @@ class Adapter
     }
 
     /**
+     * Given a message file, parse the mime boundary from its header
+     *
+     * @param string $file
+     *
+     * @return string
+     * @throws MimeMessageException
+     */
+    public function parseMessageBoundary($file) {
+        // boundary="([^\"]+)"
+        $fp = fopen($file, 'r');
+        $startPos = false;
+        $line = '';
+        while ($startPos === false && ($line .= fread($fp, 8192))) {
+            $startPos = strpos($line, 'boundary="');
+            if ($startPos !== false) {
+                $line .= fread($fp, 8192);
+                break;
+            }
+        }
+        $line = substr($line, $startPos);
+
+        $matches = [];
+        if (!preg_match('/boundary="([^"]+)"/', $line, $matches)) {
+            throw new MimeMessageException('Unable to parse boundary from message');
+        }
+
+        return $matches[1];
+    }
+
+    /**
      * Set the path to the `AS2Secure.jar` file.
      *
      * @param string $path Path to file.
@@ -638,17 +754,17 @@ class Adapter
      *
      * @param string $file Path to file.
      * @param bool $useZlib Use zlip compression.
-     * @param string $encoding
+     * @param string $encoding base64, 8bit, 7bit
      * @return bool|string
      * @throws Pkcs12BundleException
      * @throws UnsignedMessageException
      */
-    public function sign($file, $useZlib=false, $encoding='base64') {
+    public function sign($file, $useZlib=false) {
         if (!$this->sendingPartner->getSecPkcs12()) {
             throw new Pkcs12BundleException('Missing PKCS12 bundle to sign outgoing messages');
         }
 
-        $parameters = [];
+        // $parameters = [];
 
         if ($useZlib) {
             //$parameters[] = '-compress';
@@ -657,14 +773,38 @@ class Adapter
 
         $destinationFile = $this->getTempFilename();
 
+        $privateKey = 'file://' . $this->sendingPartner->getPrivateKeyFile();
+        if ($this->sendingPartner->getSecPkcs12Password()) {
+            $privateKey = [$privateKey, $this->sendingPartner->getSecPkcs12Password()];
+        }
+
+        $output = [];
+        $result = -1;
+        $command = sprintf(
+            'openssl smime -sign -md %s -in %s -inform SMIME -out %s -inkey %s -signer %s',
+            $this->sendingPartner->getSecSignatureAlgorithm(),
+            $file,
+            $destinationFile,
+            $this->sendingPartner->getPrivateKeyFile(),
+            $this->sendingPartner->getPublicCertFile()
+        );
+
+        exec($command, $output, $result);
+        $result = ($result == 0);
+        unset($output);
+
+        /*
+        // TODO: Revert to the PHP version once changing the algorithm is allowed with openssl_pkcs7_sign
+        $headers = [];
+
         if ($this->sendingPartner->getExtraCerts() !== null) {
             $result = openssl_pkcs7_sign(
                 $file,
                 $destinationFile,
                 'file://' . $this->sendingPartner->getPublicCertFile(),
-                'file://' . $this->sendingPartner->getPrivateKeyFile(),
-                [],
-                PKCS7_BINARY | PKCS7_DETACHED,
+                $privateKey,
+                $headers,
+                PKCS7_BINARY | PKCS7_DETACHED | PKCS7_NOATTR,
                 $this->sendingPartner->getExtraCertsFile()
             );
         }
@@ -673,34 +813,16 @@ class Adapter
                 $file,
                 $destinationFile,
                 'file://' . $this->sendingPartner->getPublicCertFile(),
-                'file://' . $this->sendingPartner->getPrivateKeyFile(),
-                [],
-                PKCS7_BINARY | PKCS7_DETACHED
+                $privateKey,
+                $headers,
+                PKCS7_BINARY | PKCS7_DETACHED | PKCS7_NOATTR
             );
         }
+        */
 
         if (!$result) {
             throw new UnsignedMessageException('Failed to sign message: "' . openssl_error_string() . '"');
         }
-
-        /*
-        if ($this->sendingPartner->getSecPkcs12Password()) {
-            $parameters['-password'] = $this->sendingPartner->getSecPkcs12Password();
-        }
-        else {
-            $parameters[] = '-nopassword';
-        }
-
-        $parameters['-pkcs12']   = $this->sendingPartner->getSecPkcs12File();
-        // $parameters['-encoding'] = $encoding;
-        $parameters['-in']       = $file;
-        $parameters['-out']      = $destinationFile;
-
-        $this->exec(
-            'sign',
-            $parameters
-        );
-        */
 
         return $destinationFile;
     }
