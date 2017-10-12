@@ -10,6 +10,7 @@
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\InvalidPartnerException;
+use PHPAS2\Exception\InvalidPathException;
 use PHPAS2\Logger;
 use PHPAS2\Partner;
 use PHPAS2\Partner\Authentication;
@@ -110,6 +111,16 @@ abstract class AbstractMessage
                     $params['mimetype'] : $this->adapter->detectMimeType($this->getFilename())
             );
         }
+
+        if (array_key_exists('receiving_partner', $params) && $params['receiving_partner']) {
+            $this->setReceivingPartner($params['receiving_partner']);
+            $this->getReceivingPartner()->setAdapter($this->adapter);
+        }
+
+        if (array_key_exists('sending_partner', $params) && $params['sending_partner']) {
+            $this->setSendingPartner($params['sending_partner']);
+            $this->getSendingPartner()->setadapter($this->adapter);
+        }
     }
 
     /**
@@ -134,11 +145,11 @@ abstract class AbstractMessage
         try {
             switch ($type) {
                 case self::TYPE_RECEIVING:
-                    $partner = $this->getReceivingPartner()->getId();
+                    $partner = $this->getReceivingPartner();
                     break;
 
                 case self::TYPE_SENDING:
-                    $partner = $this->getSendingPartner()->getId();
+                    $partner = $this->getSendingPartner();
                     break;
 
                 default:
@@ -149,13 +160,11 @@ abstract class AbstractMessage
             $partner = 'unknown';
         }
 
-        $returnValue = bin2hex(openssl_random_pseudo_bytes(16)) . '@';
-        $returnValue .= bin2hex(openssl_random_pseudo_bytes(32)) . '-'; // 98 characters long
-        $returnValue .= microtime() . '-' . $partner . '-' . php_uname('n');
+        $returnValue = sha1(bin2hex(openssl_random_pseudo_bytes(16))) . '@';
+        $returnValue .= $partner->getId() . '.' . parse_url($partner->getSendUrl(), PHP_URL_HOST);
 
         $returnValue = str_replace(' ', '_', $returnValue);
-
-        $returnValue = '<' . substr($returnValue, 0, 253) . '>';
+        $returnValue = '<' . substr($returnValue, 0, 255) . '>';
 
         return $returnValue;
     }

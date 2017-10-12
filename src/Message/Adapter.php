@@ -65,11 +65,13 @@ class Adapter
     public function __construct()
     {
         // Default to the composer "vendor/bin" directory above this module
+        /*
         $vendorBin = realpath(
             dirname(dirname(dirname(dirname(dirname(__FILE__))))) . DIRECTORY_SEPARATOR . 'bin'
         );
         $this->setJavaPath('/usr/bin/java');
         $this->setJarPath($vendorBin . DIRECTORY_SEPARATOR . 'AS2Secure.jar');
+        */
         $this->setOpensslPath('/usr/bin/openssl');
     }
 
@@ -102,7 +104,10 @@ class Adapter
             $fileContents = md5_file($message);
         }
         else {
-            throw new UnknownAuthenticationMethodException(sprintf('Unknown checksum algorithm "%s"', $algorithm));
+            throw new UnknownAuthenticationMethodException(
+                sprintf('Unknown checksum algorithm "%s"', $algorithm),
+                UnknownAuthenticationMethodException::ERROR_AUTHENTICATION
+            );
         }
 
         return base64_encode($this->hex2bin($fileContents)) . ', ' . $algorithm;
@@ -209,6 +214,7 @@ class Adapter
     /**
      * Decrypt an incoming encrypted message.
      *
+     * @deprecated
      * @param string $file Path to file.
      * @return bool|string
      * @throws Pkcs12BundleException
@@ -492,11 +498,20 @@ class Adapter
      *
      * @param null $path Subdirectories of base messages directory.
      * @return string
+     * @throws InvalidPathException
      */
     public function getMessagesDir($path=null) {
-        $returnValue = $this->getTopDir() . 'messages' . DIRECTORY_SEPARATOR;
+        $returnValue = $this->getTopDir() . '_messages' . DIRECTORY_SEPARATOR;
         if ($path !== null) {
             $returnValue .= $path . DIRECTORY_SEPARATOR;
+        }
+        if (!is_dir($returnValue)) {
+            mkdir($returnValue, 0777, true);
+        }
+        if (!is_writable($returnValue)) {
+            if (!chmod($returnValue, 0777)) {
+                throw new InvalidPathException('Incoming messages directory is not writable');
+            }
         }
         return $returnValue;
     }
@@ -781,7 +796,7 @@ class Adapter
         $output = [];
         $result = -1;
         $command = sprintf(
-            'openssl smime -sign -md %s -in %s -inform SMIME -out %s -inkey %s -signer %s',
+            $this->getOpensslPath() . ' smime -sign -md %s -in %s -inform SMIME -out %s -inkey %s -signer %s',
             $this->sendingPartner->getSecSignatureAlgorithm(),
             $file,
             $destinationFile,
@@ -841,10 +856,16 @@ class Adapter
         $result = openss_pkcs7_verify($file, PKCS7_BINARY|PKCS7_DETACHED, $destinationFile);
 
         if ($result === -1) {
-            throw new UnverifiedMessageException('Error while verifying message: "' . openssl_error_string() . '"');
+            throw new UnverifiedMessageException(
+                'Error while verifying message: "' . openssl_error_string() . '"',
+                InvalidMessageException::ERROR_INTEGRITY_CHECK
+            );
         }
         else if ($result === false ) {
-            throw new InvalidMessageException('Message verification failed.');
+            throw new InvalidMessageException(
+                'Message verification failed.',
+                InvalidMessageException::ERROR_INTEGRITY_CHECK
+            );
         }
 
         /*

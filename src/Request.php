@@ -11,12 +11,14 @@ namespace PHPAS2;
 
 use PHPAS2\Exception\MessageDecryptionException;
 use PHPAS2\Exception\MethodNotAvailableException;
+use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnencryptedMessageException;
 use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
+use Zend\Mime\Message as MimeMessage;
 
 /**
  * Class Request
@@ -28,6 +30,8 @@ use PHPAS2\Message\MessageDispositionNotification;
  */
 class Request extends AbstractMessage
 {
+    protected $headerCollection;
+
     public function __construct($content, $headers) {
         if (!($headers instanceof HeaderCollection)) {
             $headerCollection = new HeaderCollection();
@@ -35,8 +39,7 @@ class Request extends AbstractMessage
             $headers = $headerCollection;
         }
 
-        $this->headerCollection = $headers;
-        $mimeType = $this->headerCollection->getheader('content-type');
+        $mimeType = $headers->getHeader('content-type');
 
         $mimeTypeSeparator = $pos = strpos($mimeType, ';');
         if ($mimeTypeSeparator !== false) {
@@ -44,16 +47,15 @@ class Request extends AbstractMessage
         }
         
         $params = [
-            'partner_from' => $this->getHeaders()->getHeader('as2-from'),
-            'partner_to'   => $this->getHeaders()->getHeader('as2-to'),
-            'mimeType'     => $mimeType,
-            'is_file'      => false
+            'sending_partner'     => $headers->getHeader('as2-from'),
+            'receiving_partner'   => $headers->getHeader('as2-to'),
+            'mimeType'            => $mimeType,
+            'is_file'             => false
         ];
-        $e = new \Exception('test');
-        var_dumP($e->getTraceAsString());exit;
 
         parent::__construct($content, $params);
 
+        $this->headerCollection = $headers;
         $messageId = trim($this->getHeaders()->getHeader('message-id'), '<>');
         $this->setMessageId($messageId);
     }
@@ -86,14 +88,16 @@ class Request extends AbstractMessage
                 $content = $this->getHeaders()->__toString() . "\n\n";
                 $content .= file_get_contents($this->getPath());
 
-
-
                 $input = $this->adapter->getTempFilename();
-                $mimePart = \Horde_Mime_Part::parseMessage($content);
-                file_put_contents($input, $mimePart->toString());
 
-                $returnVal = $this->adapter->decrypt($input);
-                return $returnVal;
+                $mimeMessage = MimeMessage::createFromMessage($content);
+                file_put_contents($input, $mimeMessage->getPartContent(0));
+
+                //$mimePart = \Horde_Mime_Part::parseMessage($content);
+                //file_put_contents($input, $mimePart->toString());
+
+                $returnVal = $this->decryptMessage($input);
+                echo file_get_contents($returnVal);exit;
             }
             catch (\Exception $e) {
                 throw $e;
@@ -215,6 +219,36 @@ class Request extends AbstractMessage
     }
 
     /**
+     * Decrypt an incoming encrypted message.
+     *
+     * @param string $file Path to file.
+     * @return bool|string
+     * @throws Pkcs12BundleException
+     * @throws MessageDecryptionException
+     */
+    protected function decryptMessage($file) {
+        $privateKey = $this->getReceivingPartner()->getPrivateKeyFile();
+        if (!$privateKey) {
+            throw new Pkcs12BundleException('Unable to extract private key from PKCS12 bundle');
+        }
+
+        $privateKey = openssl_pkey_get_private('file://' . $privateKey);
+        $cert = openssl_x509_read('file://' . $this->getReceivingPartner()->getPublicCertFile());
+
+        $destinationFile = $this->getAdapter()->getTempFilename();
+
+        $result = openssl_pkcs7_decrypt($file, $destinationFile, $cert, $privateKey);
+        if (!$result) {
+            throw new MessageDecryptionException(
+                'OpenSSL failed to decrypt the message',
+                MessageDecryptionException::ERROR_DECRYPTION
+            );
+        }
+
+        return $destinationFile;
+    }
+
+    /**
      * Decrypt message headers
      *
      * @param $inputFilename
@@ -249,7 +283,7 @@ class Request extends AbstractMessage
                 $mimeType = $structure->ctype_primary . '/' . $structure->ctype_secondary;
             }
             catch (\Exception $e) {
-                throw new MessageDecryptionException($e->getMessage());
+                throw new MessageDecryptionException($e->getMessage(), MessageDecryptionException::ERROR_DECRYPTION);
             }
         }
 

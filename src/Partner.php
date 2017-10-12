@@ -876,7 +876,10 @@ class Partner
      */
     public function setSendEncoding($encoding) {
         if (!in_array($encoding, array_keys($this->getAvailableEncodingMethods()))) {
-            throw new InvalidEncodingException(sprintf('Unsupported encoding "%s"', $encoding));
+            throw new InvalidEncodingException(
+                sprintf('Unsupported encoding "%s"', $encoding),
+                InvalidEncodingException::ERROR_FORMAT
+            );
         }
         $this->sendEncoding = $encoding;
         return $this;

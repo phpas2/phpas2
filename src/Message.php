@@ -198,7 +198,6 @@ class Message extends AbstractMessage
             'AS2-From'                    => $this->getSendingPartner()->getId(true),
             'AS2-To'                      => $this->getReceivingPartner()->getId(true),
             'AS2-Version'                 => '1.2',
-            'From'                        => $this->getSendingPartner()->getEmail(),
             'Subject'                     => $this->getSendingPartner()->getSendSubject(),
             'Message-ID'                  => $this->getMessageId(),
             'Mime-Version'                => '1.0',
@@ -207,6 +206,10 @@ class Message extends AbstractMessage
             'User-Agent'                  => Adapter::getSoftwareName(),
             'Accept-Encoding'             => 'gzip, deflate'
         ]);
+
+        if ($this->getSendingPartner()->getEmail()) {
+            $this->getheaders()->addHeader('From', $this->getSendingPartner()->getEmail());
+        }
 
         if ($this->getReceivingPartner()->getMdnSigned()) {
             $this->getHeaders()->addHeader(
@@ -234,6 +237,7 @@ class Message extends AbstractMessage
         }
 
         file_put_contents($this->path, base64_decode($content));
+        copy($this->path, '/media/mac-share/sandbox/test-as2-message.p7m');
 
         return $this;
     }
@@ -245,7 +249,7 @@ class Message extends AbstractMessage
      *
      * @return MessageDispositionNotification
      */
-    public function generateMDN($exception=null) {
+    public function generateMDN(\Exception $exception=null) {
         $mdn = new MessageDispositionNotification($this);
 
         $messageId = $this->getHeaders()->getHeader('message-id');

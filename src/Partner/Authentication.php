@@ -82,7 +82,8 @@ class Authentication
     public function setMethod($method) {
         if (!$this->_isValidMethod($method)) {
             throw new UnknownAuthenticationMethodException(
-                'Unknown authenticatoin method.  Please use one of the METHOD_* constants'
+                'Unknown authenticatoin method.  Please use one of the METHOD_* constants',
+                UnknownAuthenticationMethodException::ERROR_AUTHENTICATION
             );
         }
 

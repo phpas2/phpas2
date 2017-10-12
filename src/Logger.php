@@ -61,7 +61,7 @@ class Logger
     public function log($level, $message, $messageId=null) {
         $line = '[' . date('Y-m-d H:i:s') . '] ';
         if ($messageId) {
-            $line .= trim($messageId, '<>') . ' ';
+            $line .= substr(sha1(trim($messageId, '<>')), -8) . ' ';
         }
         $line .= '(' . strtoupper($level) . ') ' . $message . PHP_EOL;
 

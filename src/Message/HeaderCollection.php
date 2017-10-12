@@ -51,10 +51,10 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
     /**
      * Add headers to collection.
      *
-     * @param array $headers Array of headers where the key is the header name and the value is the value of the header.
+     * @param array|HeaderCollection $headers Array of headers where the key is the header name and the value is the value of the header.
      * @return $this
      */
-    public function addHeaders(array $headers) {
+    public function addHeaders($headers) {
         foreach ($headers as $key => $value) {
             $this->addHeader($key, $value);
         }
@@ -113,8 +113,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      */
     public function getHeader($name) {
         $tmp = array_change_key_case($this->headers, CASE_LOWER);
-        if (array_key_exists($name, $tmp)) {
-            return $tmp[$name];
+        if (array_key_exists(strtolower($name), $tmp)) {
+            return $tmp[strtolower($name)];
         }
         return false;
     }
@@ -229,8 +229,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return HeaderCollection
      */
-    public function parseHttpRequest() {
-        $returnVal = new HeaderCollection();
+    public static function parseHttpRequest() {
+        $returnVal = new static();
         if (!function_exists('apache_request_headers')) {
             $headers = [
                 'Content-Type'   => $_SERVER['CONTENT_TYPE'],
@@ -239,7 +239,7 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
             foreach ($_SERVER as $key => $value) {
                 if (strpos($key, 'HTTP_') === 0) {
                     $key = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($key, 5)))));
-                    $headers[$key] = $value;
+                    $headers[$key] = trim($value, '"');
                 }
             }
             $returnVal->addheaders($headers);

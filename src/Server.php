@@ -9,9 +9,12 @@
 
 namespace PHPAS2;
 
+use PHPAS2\Exception\InvalidPartnerException;
+use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Exception\InvalidMessageException;
+use PHPAS2\Message\MessageDispositionNotification;
 
 /**
  * Class Server
@@ -38,16 +41,22 @@ class Server
     /**
      * Server constructor.
      *
-     * @param null $request
+     * @param string $receivingPartnerId Partner ID this server is to act on behalf of.
+     * @param Request|null $request AS2 Request object or null to build from incoming POST request.
+     * @return AbstractMessage
      */
-    public function __construct($request=null) {
+    public function __construct($receivingPartnerId, $request=null) {
         $this->adapter = new Adapter();
         $this->logger  = Logger::getInstance();
+
+        $receivingPartner = new Partner();
+        $receivingPartner->loadFromConfig($receivingPartnerId);
 
         ob_start();
 
         $error = null;
         $mdn = null;
+        $object = null;
 
         try {
             if ($request === null) {
@@ -56,8 +65,7 @@ class Server
                     throw new InvalidMessageException('An empty AS2 message was received');
                 }
 
-                $headers = new HeaderCollection();
-                $headers->parseHttpRequest();
+                $headers = HeaderCollection::parseHttpRequest();
 
                 if (!$headers->count()) {
                     throw new InvalidMessageException('AS2 message without headers was received');
@@ -84,6 +92,17 @@ class Server
                         'The AS2-To and AS2-From are identical',
                         $headers->getHeader('message-id')
                     );
+                }
+
+                $expectedPartnerId = $receivingPartner->getId();
+                if ($headers->getHeader('as2-to') != $expectedPartnerId) {
+                    $this->logger->log(
+                        Logger::LEVEL_FATAL,
+                        'Unknown recipient "' . $headers->getHeader('as2-to') . '"; expected "'
+                            . $receivingPartner->getId() . '".',
+                        $headers->getHeader('message-id')
+                    );
+                    throw new InvalidPartnerException('Unknown AS2 recipient');
                 }
 
                 $this->logger->log(
@@ -114,54 +133,54 @@ class Server
             $error = $e;
         }
 
-        if ($object instanceof Message || (!is_null($error) && !($object instanceof MDN))) {
+        if ($object instanceof Message || (!is_null($error) && !($object instanceof MessageDispositionNotification))) {
             $objectType = self::TYPE_MESSAGE;
             $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is a Message');
 
             try {
-                if (is_null($error)) {
-                    $object->decode();
-                    $files = $object->getFiles();
+                if (!is_null($error)) {
+                    throw $error;
+                }
+
+                $object->decode();
+                $files = $object->getFiles();
+                $this->logger->log(
+                    Logger::LEVEL_INFO,
+                    sprintf(
+                        '%d payload%s found in transmission',
+                        count($files),
+                        (count($files) == 1 ? '' : 's')
+                    )
+                );
+
+                foreach ($files as $key => $file) {
+                    $content = file_get_contents($file['path']);
                     $this->logger->log(
                         Logger::LEVEL_INFO,
                         sprintf(
-                            '%d payload%s found in transmission',
-                            count($files),
-                            (count($files) == 1 ? '' : 's')
+                            'Payload #%d : %f KB / "%s"',
+                            $key + 1,
+                            round(strlen($content) / 1024, 2),
+                            $file['filename']
                         )
                     );
 
-                    foreach ($files as $key => $file) {
-                        $content = file_get_contents($file['path']);
-                        $this->logger->log(
-                            Logger::LEVEL_INFO,
-                            sprintf(
-                                'Payload #%d : %f KB / "%s"',
-                                $key + 1,
-                                round(strlen($content) / 1024, 2),
-                                $file['filename']
-                            )
-                        );
-
-                        $this->saveMessage($content, [], $filename . '.payload-' . $key, self::MESSAGE_PAYLOAD);
-                    }
-
-                    $mdn = $object->generateMDN($error);
-                    $mdn->encode($object);
+                    $this->saveMessage($content, [], $filename . '.payload-' . $key, self::MESSAGE_PAYLOAD);
                 }
-                else {
-                    throw $error;
-                }
+
+                $mdn = $object->generateMDN();
+                $mdn->encode($object);
             }
             catch (\Exception $e) {
-                $mdn = new MDN();
-                $mdn->setSendingPartner($headers->getHeader('as2-from'))
-                    ->setReceivingPartner($headers->getHeader('as2-to'))
+                $mdn = new MessageDispositionNotification();
+                $mdn->setMessage($e->getMessage())
+                    ->setSendingPartner($headers->getHeader('as2-from'))
+                    ->setReceivingPartner($receivingPartner)
                     ->setAttribute('original-message-id', $headers->getHeader('message-id'));
                 $mdn->encode();
             }
         }
-        else if ($object instanceof MDN) {
+        else if ($object instanceof MessageDispositionNotification) {
             $objectType = self::TYPE_MDN;
             $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is an MDN');
         }
@@ -188,6 +207,14 @@ class Server
                 }
 
                 // TODO: Potentially fire off an event for listeners to react to
+
+                if ($request->getReceivingPartner() instanceof Partner) {
+                    // TODO: Call "onReceived" method
+                }
+
+                if ($request->getSendingPartner() instanceof Partner) {
+                    // TODO: Call "onSent" method
+                }
             }
         }
         catch (\Exception $e) {
@@ -195,10 +222,12 @@ class Server
         }
 
         if (!is_null($error) && $objectType == self::TYPE_MESSAGE) {
-            $mdn = new MDN($e);
-            $mdn->setSendingPartner($headers->getHeader('as2-from'))
-                ->setReceivingPartner($headers->getHeader('as2-to'))
-                ->setAttribute('original-message-id', $headers->getHeader('message-id'));
+            $mdn = new MessageDispositionNotification($e);
+            $mdn->setSendingPartner($headers->getHeader('as2-to'))
+                ->setReceivingPartner($headers->getHeader('as2-from'))
+                ->setAttribute('original-message-id', $headers->getHeader('message-id'))
+                ->getHeaders()->addHeader('Original-Message-Id', $headers->getHeader('message-id'))
+                ;
             $mdn->encode();
         }
 
@@ -271,7 +300,6 @@ class Server
      */
     protected function saveMessage($data, HeaderCollection $headers, $filename='', $type=self::MESSAGE_RAW) {
         $dir = $this->adapter->getMessagesDir('inbox');
-        mkdir($dir);
 
         if (!$filename) {
             list($micro, ) = explode(' ', microtime());
@@ -284,7 +312,7 @@ class Server
             case self::MESSAGE_RAW:
                 file_put_contents($dir . $filename, $data);
                 if ($headers->count()) {
-                    file_put_contents($dir . $filename . '.headers', $data);
+                    file_put_contents($dir . $filename . '.headers', $headers->__toString());
                 }
                 break;
 

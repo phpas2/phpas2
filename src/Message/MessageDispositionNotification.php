@@ -9,13 +9,17 @@
 
 namespace PHPAS2\Message;
 
+use PHPAS2\Exception\AbstractException;
 use PHPAS2\Exception\InvalidMessageException;
 use PHPAS2\Exception\MDNFailure;
 use PHPAS2\Exception\UnsignedMdnException;
+use PHPAS2\Logger;
 use PHPAS2\Message;
 use PHPAS2\Request;
 use PHPAS2\Response;
 use Zend\Mime\Message as MimeMessage;
+use Zend\Mime\Mime;
+use Zend\Mime\Part;
 
 /**
  * Class MessageDispositionNotification
@@ -39,7 +43,7 @@ class MessageDispositionNotification extends AbstractMessage
     /** @var HeaderCollection */
     protected $attributes;
     /** @var Message */
-    protected $message;
+    protected $message = '';
     /** @var string */
     protected $url;
 
@@ -50,13 +54,16 @@ class MessageDispositionNotification extends AbstractMessage
         $this->setAttribute('action-mode', self::ACTION_AUTO)
             ->setAttribute('sending-mode', self::MODE_AUTO);
 
-        if ($data instanceof \Exception) {
+        // TODO: Add AS2Exception type support
+        if ($data instanceof AbstractException) {
+            $this->setMessage($data->getMessage())
+                ->getHeaders()->addHeader('Disposition-Type', $data->getLevelText())
+                ->addHeader('Disposition-Modifier', $data->getMessageShort());
+        }
+        else if ($data instanceof \Exception) {
             $this->setMessage($data->getMessage());
-            $this->setAttribute('disposition-type', $data->getLevel())
-                ->setAttribute('disposition-modifier', $data->getmessageShort());
-
-            $this->setSendingPartner($params['sending_partner']);
-            $this->setReceivingPartner($params['receiving_partner']);
+            $this->getheaders()->addHeader('Disposition-Type', 'error')
+                ->addHeader('Disposition-Modifier', 'unexpected-processing-error');
         }
         else if ($data instanceof Response) {
             $headers = array_pop($data->getHeaders());
@@ -92,6 +99,7 @@ class MessageDispositionNotification extends AbstractMessage
             $this->setSendingPartner($data->getSendingPartner())
                 ->setReceivingPartner($data->getReceivingPartner());
         }
+        /*
         else if ($data instanceof \Horde_Mime_Part) {
             $this->setSendingPartner($params['sending_partner'])
                 ->setReceivingPartner($params['receiving_partner'])
@@ -99,9 +107,18 @@ class MessageDispositionNotification extends AbstractMessage
 
             file_put_contents($this->getPath(), $data->toString(true));
         }
+        */
+        else if ($data === null) {
+            // To handle error notifications
+        }
         else {
+            $this->logger->log(
+                Logger::LEVEL_ERROR,
+                'Unknown message type encountered: "' . gettype($data) . '"',
+                $this->attributes->getheader('original-message-id')
+            );
             throw new InvalidMessageException(
-                'Unexpected message encountered. Expected Request, Response, Message or Horde_Mime_Part'
+                'Unexpected message encountered. Expected Request, Response, or Message'
             );
         }
     }
@@ -149,15 +166,17 @@ class MessageDispositionNotification extends AbstractMessage
      * @return $this
      */
     public function encode(Message $message=null) {
-        $container = new \Horde_Mime_Part();
-        $container->setType('multipart/report');
+        $container = new MimeMessage();
+        $containerHeaders = new HeaderCollection();
+        $containerHeaders->addHeader('Content-Type', 'multipart/report; charset=utf-8');
+        //$container->setType('multipart/report');
 
-        $textPart = new \Horde_Mime_Part();
-        $textPart->setType('text/plain');
-        $textPart->setContents($this->getMessage());
-        $textPart->setTransferEncoding(\Horde_Mime_Part::ENCODE_7BIT);
+        $textPart = new Part($this->getMessage());
+        $textPart->setType(Mime::TYPE_TEXT)
+            ->setCharset('utf-8')
+            ->setEncoding(Mime::ENCODING_7BIT);
 
-        $container[] = $textPart;
+        $container->addPart($textPart);
 
         $lines = new HeaderCollection();
         $lines->addHeader('Reporting-UA', Adapter::getServerSignature());
@@ -165,34 +184,33 @@ class MessageDispositionNotification extends AbstractMessage
             $lines->addHeader('Original-Recipient', 'rfc822; ' . $this->getSendingPartner()->getId(true));
             $lines->addHeader('Final-Recipient', 'rfc822; ' . $this->getSendingPartner()->getId(true));
         }
-        $lines->addHeader('Original-Message-ID', $this->getOriginalMessageId());
+        $lines->addHeader('Original-Message-ID', $this->getAttribute('message-id'));
         $lines->addHeader(
             'Disposition',
             sprintf(
                 '%s/%s; %s',
-                $this->getActionMode(),
-                $this->getSendingMode(),
-                $this->getDispositionType()
+                $this->getAttribute('action-mode'),
+                $this->getAttribute('sending-mode'),
+                $this->getAttribute('disposition-type')
             )
         );
-        if ($this->getDispositionType() !== self::TYPE_PROCESSED) {
+        if ($this->getAttribute('disposition-type') !== self::TYPE_PROCESSED) {
             $lines->addHeader(
                 'Disposition',
-                $lines->getHeader('Disposition') . ': ' . $this->getDispositionModifier()
+                $lines->getHeader('Disposition') . ': ' . $this->getAttribute('disposition-modifier')
             );
         }
-        if ($this->getReceivedContentMic()) {
-            $lines->addHeader('Received-Content-MIC', $this->getReceivedContentMic());
+        if ($this->getAttribute('received-content-mic')) {
+            $lines->addHeader('Received-Content-MIC', $this->getAttribute('received-content-mic'));
         }
 
-        $mdn = new \Horde_Mime_Part();
-        $mdn->setType('message/disposition-notification');
-        $mdn->setContents($lines);
-        $mdn->setTransferEncoding(\Horde_Mime_Part::ENCODE_7BIT);
+        $mdn = new Part($lines->__toString());
+        $mdn->setType('message/disposition-notification')
+            ->setEncoding(Mime::ENCODING_7BIT);
 
-        $this->setMessageId($this->generateMessageId($this->getSendingPartner()));
+        $this->setMessageId($this->generateMessageId(Message::TYPE_SENDING));
 
-        $this->headerCollection->addHeaders([
+        $this->getHeaders()->addHeaders([
             'AS2-Version'  => '1.2',
             'Message-ID'   => $this->getMessageId(),
             'Mime-Version' => '1.0',
@@ -200,10 +218,10 @@ class MessageDispositionNotification extends AbstractMessage
             'User-Agent'   => Adapter::getServerSignature()
         ]);
 
-        $this->headerCollection->addHeaders($container->addMimeHeaders());
+        $this->getHeaders()->addHeaders($containerHeaders);
 
         if ($this->getSendingPartner()) {
-            $this->headerCollection->addHeaders([
+            $this->getHeaders()->addHeaders([
                 'AS2-From'                    => $this->getSendingPartner()->getId(true),
                 'From'                        => $this->getSendingPartner()->getEmail(),
                 'Subject'                     => $this->getSendingPartner()->getMdnSubject(),
@@ -212,7 +230,7 @@ class MessageDispositionNotification extends AbstractMessage
         }
 
         if ($this->getReceivingPartner()) {
-            $this->headerCollection->addHeaders([
+            $this->getHeaders()->addHeaders([
                 'AS2-To'            => $this->getReceivingPartner()->getId(true),
                 'Recipient-Address' => $this->getReceivingPartner()->getSendUrl()
             ]);
@@ -229,18 +247,18 @@ class MessageDispositionNotification extends AbstractMessage
         $this->setPath($this->adapter->getTempFilename());
 
         if ($message && $message->getHeaders()->getHeader('Disposition-Notification-Options')) {
-            file_put_contents($this->getPath(), $container->toString(['canonical' => true, 'headers' => true]));
+            file_put_contents($this->getPath(), $containerHeaders->__toString() . PHP_EOL . $container->generateMessage());
             $this->setPath($this->adapter->sign($this->getPath()));
 
             $content = file_get_contents($this->getPath());
             $this->headerCollection->addHeadersFromMessage($content);
 
-            $mimePart = \Horde_Mime_Part::parseMessage($content);
+            $mimePart = MimeMessage::createFromMessage($content);
 
-            file_put_contents($this->getPath(), $mimePart->getContents());
+            file_put_contents($this->getPath(), $mimePart->getPartContent(0));
         }
         else {
-            file_put_contents($this->getPath(), $container->toString(['canonical' => true, 'headers' => false]));
+            file_put_contents($this->getPath(), $container->generateMessage());
         }
 
         return $this;

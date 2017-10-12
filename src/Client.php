@@ -79,6 +79,7 @@ class Client
             CURLOPT_PORT           => $port,
             CURLOPT_HEADER         => false,
             CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_COOKIE         => 'XDEBUG_SESSION=PHPSTORM',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_BINARYTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => true,
