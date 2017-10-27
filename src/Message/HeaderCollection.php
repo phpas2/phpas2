@@ -19,6 +19,10 @@ namespace PHPAS2\Message;
  */
 class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
 {
+    const EOL_CR   = "\r";
+    const EOL_CRLF = "\r\n";
+    const EOL_LF   = "\n";
+
     /** @var array */
     protected $headers = [];
     /** @var array */
@@ -32,7 +36,17 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * @return string
      */
     public function __toString() {
-        return implode("\n", $this->toArray());
+        return $this->toString();
+    }
+
+    /**
+     * Generate full header block as string.
+     *
+     * @param string $glue
+     * @return string
+     */
+    public function toString($glue=self::EOL_CRLF) {
+        return implode($glue, $this->toArray());
     }
 
     /**

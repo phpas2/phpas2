@@ -154,7 +154,7 @@ class Message extends AbstractMessage
 
             $file = $this->adapter->getTempFilename();
 
-            file_put_contents($file, $messageContent);
+            file_put_contents($file, trim($messageContent));
         }
         catch (\Exception $e) {
             $this->logger->log(
@@ -200,7 +200,7 @@ class Message extends AbstractMessage
             'AS2-Version'                 => '1.2',
             'Subject'                     => $this->getSendingPartner()->getSendSubject(),
             'Message-ID'                  => $this->getMessageId(),
-            'Mime-Version'                => '1.0',
+            'MIME-Version'                => '1.0',
             'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl(),
             'Recipient-Address'           => $this->getReceivingPartner()->getSendUrl(),
             'User-Agent'                  => Adapter::getSoftwareName(),
@@ -236,8 +236,9 @@ class Message extends AbstractMessage
             $content = substr($content, $headerSeparator + 2);
         }
 
-        file_put_contents($this->path, base64_decode($content));
-        copy($this->path, '/media/mac-share/sandbox/test-as2-message.p7m');
+        copy($this->path, '/media/mac-share/sandbox/as2-message.p7m');
+
+        file_put_contents($this->path, trim($content) . "\n");
 
         return $this;
     }

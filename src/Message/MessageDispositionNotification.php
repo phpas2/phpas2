@@ -225,7 +225,7 @@ class MessageDispositionNotification extends AbstractMessage
                 'AS2-From'                    => $this->getSendingPartner()->getId(true),
                 'From'                        => $this->getSendingPartner()->getEmail(),
                 'Subject'                     => $this->getSendingPartner()->getMdnSubject(),
-                'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl()
+                // 'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl()
             ]);
         }
 

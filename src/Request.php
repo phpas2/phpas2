@@ -15,6 +15,7 @@ use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnencryptedMessageException;
 use PHPAS2\Exception\UnsignedMdnException;
 use PHPAS2\Exception\UnsignedMessageException;
+use PHPAS2\Exception\UnverifiedMessageException;
 use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
@@ -85,19 +86,15 @@ class Request extends AbstractMessage
 
         if ($mimeType == 'application/pkcs7-mime' || $mimeType == 'application/x-pkcs7-mime') {
             try {
-                $content = $this->getHeaders()->__toString() . "\n\n";
+                $content = $this->getHeaders()->__toString() . HeaderCollection::EOL_CRLF . HeaderCollection::EOL_CRLF;
                 $content .= file_get_contents($this->getPath());
 
                 $input = $this->adapter->getTempFilename();
 
-                $mimeMessage = MimeMessage::createFromMessage($content);
-                file_put_contents($input, $mimeMessage->getPartContent(0));
-
-                //$mimePart = \Horde_Mime_Part::parseMessage($content);
-                //file_put_contents($input, $mimePart->toString());
+                file_put_contents($input, $content);
 
                 $returnVal = $this->decryptMessage($input);
-                echo file_get_contents($returnVal);exit;
+                $this->setPath($returnVal);
             }
             catch (\Exception $e) {
                 throw $e;
@@ -119,54 +116,56 @@ class Request extends AbstractMessage
     /**
      * Get aon object from a received message
      *
-     * @return Mdn|Message
+     * @return MessageDispositionNotification|Message
      */
     public function getObject() {
-        // TODO: Is the tempfile necessary?
-        $content = $this->getHeaders()->__toString() . "\n\n";
-        $content .= file_get_contents($this->getPath());
-        $input = $this->adapter->getTempFilename();
+        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
 
-        file_put_contents($input, $content);
+        $this->isSigned = false;
+        $this->isMdn = false;
+        /** @var \Zend\Mime\Part $part */
+        foreach ($message->getParts() as $part) {
+            $headers = $part->getHeadersArray();
+            $contentType = null;
+            foreach ($headers as $pair) {
+                if (strtolower($pair[0]) == 'content-type') {
+                    $contentType = $pair[1];
+                    break;
+                }
+            }
+            if (preg_match('/application\/(?:x-)?pkcs7-signature/', $contentType)) {
+                $this->isSigned = true;
+            }
+            else if (preg_match('/multipart\/report/', $contentType)) {
+                $this->isMdn = true;
+            }
+        }
 
-        $params = [
-            'include_bodies' => false,
-            'decode_headers' => true,
-            'decode_bodies'  => false,
-            'input'          => false
-        ];
-        $decoder = new \Mail_mimeDecode(file_get_contents($input));
-        $structure = $decoder->decode($params);
-        $mimeType = strtolower($structure->ctype_primary . '/' . $structure->ctype_secondary);
+        if ($this->isSigned) {
+            $this->verifyMessageSignature();
+        }
 
-        $encrypted = $this->decryptMessageHeaders($input, $content, $mimeType, $structure);
-        $mic = false;
-        $signed = $this->verifySignature($input, $mimeType, $structure, $mic);
-
-        $this->checkMessageConstruction($mimeType, $signed, $encrypted);
-
-        $message = file_get_contents($input);
-        $mimePart = \Horde_Mime_Part::parseMessage($message);
+        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
+        $micChecksum = $this->adapter->getMicChecksum($this->getPath());
 
         $params = [
             'is_file'           => false,
-            'mic'               => $mic,
+            'mic'               => $micChecksum,
             'receiving_partner' => $this->getReceivingPartner(),
             'sending_partner'   => $this->getSendingPartner()
         ];
 
-        switch (strtolower($mimeType)) {
-            case 'multipart/report':
-                $object = new MessageDispositionNotification($mimePart, $params);
-                break;
-
-            default:
-                $object = new Message($mimePart, $params);
-                break;
+        if ($this->isMdn) {
+            $returnVal = new MessageDispositionNotification(null, $params);
+        }
+        else {
+            $returnVal = new Message($message, $params);
         }
 
-        $object->setHeaders($this->getHeaders());
-        return $object;
+        $returnVal->getHeaders()->addHeaders($this->getHeaders());
+        return $returnVal;
     }
 
     /**
@@ -176,6 +175,78 @@ class Request extends AbstractMessage
      */
     public function getUrl() {
         throw new MethodNotAvailableException('Method "getUrl" is not available on a Request message.');
+    }
+
+    /**
+     * Determine if message is encrypted (according to headers sent)
+     *
+     * @return bool
+     */
+    public function isMessageEncrypted() {
+        $mimeType  = $this->getHeaders()->getHeader('Content-Type');
+        $position  = strpos($mimeType, ';');
+        $returnVal = false;
+        if ($position !== false) {
+            $mimeType = trim(substr($mimeType, 0, $position));
+        }
+
+        if ($mimeType == 'application/pkcs7-mime' || $mimeType == 'application/x-pkcs7-mime') {
+            $returnVal = true;
+        }
+
+        return $returnVal;
+    }
+
+    public function isMessageSigned() {
+        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
+
+        $isSigned = false;
+        /** @var \Zend\Mime\Part $part */
+        foreach ($message->getParts() as $part) {
+            $headers = $part->getHeadersArray();
+            $contentType = null;
+            foreach ($headers as $pair) {
+                if (strtolower($pair[0]) == 'content-type') {
+                    if (preg_match('/application\/(?:x-)?pkcs7-signature/', $pair[1])) {
+                        $isSigned = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $isSigned;
+    }
+
+    public function processMessage() {
+        do {
+            $actedUpon = false;
+
+            // 1. Decrypt message (if encrypted)
+            if ($this->isMessageEncrypted()) {
+                $this->decryptMessage($this->getPath());
+            }
+            else {
+                $actedUpon |= true;
+            }
+
+            // 2. Verify signature (if signed)
+            if ($this->isMessageSigned()) {
+                $this->verifyMessageSignature();
+            }
+            else {
+                $actedUpon |= true;
+            }
+
+            // 3. If we did not change the message (no decryption, no verification) we're done
+            if (!$actedUpon) {
+                break;
+            }
+        }
+        while (true);
+
+        return $this;
     }
 
     /**
@@ -222,7 +293,6 @@ class Request extends AbstractMessage
      * Decrypt an incoming encrypted message.
      *
      * @param string $file Path to file.
-     * @return bool|string
      * @throws Pkcs12BundleException
      * @throws MessageDecryptionException
      */
@@ -237,7 +307,10 @@ class Request extends AbstractMessage
 
         $destinationFile = $this->getAdapter()->getTempFilename();
 
+        copy($file, '/media/mac-share/sandbox/cocoavia-shared/encrypted-message.txt');
+
         $result = openssl_pkcs7_decrypt($file, $destinationFile, $cert, $privateKey);
+        copy($destinationFile, '/media/mac-share/sandbox/cocoavia-shared/encrypted-message.txt.decrypted');
         if (!$result) {
             throw new MessageDecryptionException(
                 'OpenSSL failed to decrypt the message',
@@ -245,7 +318,7 @@ class Request extends AbstractMessage
             );
         }
 
-        return $destinationFile;
+        $this->setPath($destinationFile);
     }
 
     /**
@@ -288,6 +361,28 @@ class Request extends AbstractMessage
         }
 
         return $returnValue;
+    }
+
+    /**
+     * Verify the message contents based on the signature
+     *
+     * @return $this
+     * @throws UnverifiedMessageException
+     */
+    protected function verifyMessageSignature() {
+        $verifiedFile = $this->getAdapter()->getTempFilename();
+        $result = openssl_pkcs7_verify($this->getPath(), '', '', '', '', $verifiedFile);
+
+        if ($result === false) {
+            throw new UnverifiedMessageException('Message was tampered with or signing certificate is invalid');
+        }
+        else if ($result !== true) {
+            throw new UnverifiedMessageException('Signed message failed signature check');
+        }
+
+        $this->setPath($verifiedFile);
+
+        return $this;
     }
 
     /**

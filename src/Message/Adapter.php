@@ -557,9 +557,12 @@ class Adapter
 
         // Signature algorithms should be one of nistAlgorithms
         $signatureOid = $asn1->asn1map($decoded[0]['content'][1]['content'][0]['content'][1]['content'][0], $mapping);
+
+        /*
         if (substr($signatureOid, 0, 18) !== '2.16.840.1.101.3.4') {
             throw new InvalidSignatureAlgorithmException('Unknown algorithm OID');
         }
+        */
 
         $algorithm = $this->getAlgorithmNameFromOid($signatureOid);
         $this->micAlgorithm = $algorithm;
@@ -796,7 +799,7 @@ class Adapter
         $output = [];
         $result = -1;
         $command = sprintf(
-            $this->getOpensslPath() . ' smime -sign -md %s -in %s -inform SMIME -out %s -inkey %s -signer %s',
+            $this->getOpensslPath() . ' smime -sign -binary -md %s -in %s -out %s -inkey %s -signer %s',
             $this->sendingPartner->getSecSignatureAlgorithm(),
             $file,
             $destinationFile,
