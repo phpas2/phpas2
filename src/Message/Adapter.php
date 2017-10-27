@@ -853,10 +853,11 @@ class Adapter
      * @throws InvalidMessageException
      * @throws UnverifiedMessageException
      */
+    /*
     public function verify($file) {
         $destinationFile = $this->getTempFilename();
 
-        $result = openss_pkcs7_verify($file, PKCS7_BINARY|PKCS7_DETACHED, $destinationFile);
+        $result = openssl_pkcs7_verify($file, PKCS7_BINARY|PKCS7_DETACHED, $destinationFile);
 
         if ($result === -1) {
             throw new UnverifiedMessageException(
@@ -891,8 +892,9 @@ class Adapter
             'verify',
             $parameters
         );
-        */
+        * /
 
         return $destinationFile;
     }
+    */
 }

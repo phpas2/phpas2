@@ -20,6 +20,8 @@ use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
 use Zend\Mime\Message as MimeMessage;
+use Zend\Mime\Mime;
+use Zend\Mime\Part;
 
 /**
  * Class Request
@@ -31,7 +33,10 @@ use Zend\Mime\Message as MimeMessage;
  */
 class Request extends AbstractMessage
 {
+    /** @var HeaderCollection */
     protected $headerCollection;
+    /** @var Generate MIC checksum of message */
+    protected $mic;
 
     public function __construct($content, $headers) {
         if (!($headers instanceof HeaderCollection)) {
@@ -50,7 +55,7 @@ class Request extends AbstractMessage
         $params = [
             'sending_partner'     => $headers->getHeader('as2-from'),
             'receiving_partner'   => $headers->getHeader('as2-to'),
-            'mimeType'            => $mimeType,
+            'mimetype'            => $mimeType,
             'is_file'             => false
         ];
 
@@ -219,6 +224,15 @@ class Request extends AbstractMessage
         return $isSigned;
     }
 
+    /**
+     * Process a message via a decrypt / verify signature loop for as many times as there are signatures and encryptions.
+     * This is to support high-security messages which are signed, then encrypted, then signed again to prevent message
+     * tampering.
+     *
+     * When done, $this->getPath() will reference the verified original message.
+     *
+     * @return $this
+     */
     public function processMessage() {
         do {
             $actedUpon = false;
@@ -245,6 +259,8 @@ class Request extends AbstractMessage
             }
         }
         while (true);
+
+        // $this->mic = $this->adapter->calculateMicChecksum($this->getPath(), 'sha1');
 
         return $this;
     }
@@ -307,10 +323,7 @@ class Request extends AbstractMessage
 
         $destinationFile = $this->getAdapter()->getTempFilename();
 
-        copy($file, '/media/mac-share/sandbox/cocoavia-shared/encrypted-message.txt');
-
         $result = openssl_pkcs7_decrypt($file, $destinationFile, $cert, $privateKey);
-        copy($destinationFile, '/media/mac-share/sandbox/cocoavia-shared/encrypted-message.txt.decrypted');
         if (!$result) {
             throw new MessageDecryptionException(
                 'OpenSSL failed to decrypt the message',
@@ -363,6 +376,33 @@ class Request extends AbstractMessage
         return $returnValue;
     }
 
+    protected function disassembleSignedMessage() {
+        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
+
+        $signedMessage = '';
+
+        /** @var Part $part */
+        foreach ($message->getParts() as $part) {
+            $headers = $part->getHeadersArray();
+            $contentType = null;
+            foreach ($headers as $pair) {
+                if (strtolower($pair[0]) == 'content-type') {
+                    if (!preg_match('/application\/(?:x-)?pkcs7-signature/', $pair[1])) {
+                        $signedMessage .= Mime::LINEEND . $part->getHeaders() . Mime::LINEEND . $part->getContent();
+                    }
+                }
+            }
+        }
+
+        $signedMessage = trim($signedMessage) . Mime::LINEEND;
+
+        $destinationFile = $this->adapter->getTempFilename();
+        file_put_contents($destinationFile, $signedMessage);
+        // file_put_contents('/media/mac-share/sandbox/cocoavia-shared/as2-message.unsigned', $signedMessage);
+        $this->setPath($destinationFile);
+    }
+
     /**
      * Verify the message contents based on the signature
      *
@@ -371,13 +411,33 @@ class Request extends AbstractMessage
      */
     protected function verifyMessageSignature() {
         $verifiedFile = $this->getAdapter()->getTempFilename();
-        $result = openssl_pkcs7_verify($this->getPath(), '', '', '', '', $verifiedFile);
+
+        copy($this->getPath(), '/media/mac-share/sandbox/cocoavia-shared/as2-message.signed');
+
+        $result = openssl_pkcs7_verify(
+            $this->getPath(),
+            PKCS7_NOVERIFY|PKCS7_BINARY,
+            '',
+            [$this->getSendingPartner()->getPublicCertFile()],
+            $this->getSendingPartner()->getPublicCertFile(),
+            $verifiedFile
+        );
+
+        $errorString = '';
+        while ($err = openssl_error_string()) {
+            $errorString .= $err . Mime::LINEEND;
+        }
+        $errorString = trim($errorString);
 
         if ($result === false) {
-            throw new UnverifiedMessageException('Message was tampered with or signing certificate is invalid');
+            throw new UnverifiedMessageException(
+                'Message was tampered with or signing certificate is invalid:' . Mime::LINEEND . $errorString
+            );
         }
         else if ($result !== true) {
-            throw new UnverifiedMessageException('Signed message failed signature check');
+            throw new UnverifiedMessageException(
+                'Signed message failed signature check:' . Mime::LINEEND . $errorString
+            );
         }
 
         $this->setPath($verifiedFile);
