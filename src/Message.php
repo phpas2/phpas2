@@ -14,7 +14,6 @@ use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
 use Zend\Mime\Message as MimeMessage;
-use Zend\Mime\Mime;
 use Zend\Mime\Part;
 
 /**
@@ -39,7 +38,7 @@ class Message extends AbstractMessage
     /**
      * Message constructor.
      *
-     * @param null|string|Request|\Horde_Mime_Part $data
+     * @param null|string|Request $data
      * @param array $params
      */
     public function __construct($data = null, array $params = []) {

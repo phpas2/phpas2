@@ -99,15 +99,6 @@ class MessageDispositionNotification extends AbstractMessage
             $this->setSendingPartner($data->getSendingPartner())
                 ->setReceivingPartner($data->getReceivingPartner());
         }
-        /*
-        else if ($data instanceof \Horde_Mime_Part) {
-            $this->setSendingPartner($params['sending_partner'])
-                ->setReceivingPartner($params['receiving_partner'])
-                ->setPath($this->adapter->getTempFilename());
-
-            file_put_contents($this->getPath(), $data->toString(true));
-        }
-        */
         else if ($data === null) {
             // To handle error notifications
         }

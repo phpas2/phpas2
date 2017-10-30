@@ -138,17 +138,6 @@ class Adapter
     public function compress($file) {
         $destinationFile = $this->getTempFilename();
 
-        /*
-        $originalMimePart = \Horde_Mime_Part::parseMessage(file_get_contents($file));
-        $originalMimePart->addMimeHeaders();
-        ldd($originalMimePart->toString(['headers' => true, 'encode' => \Horde_Mime_Part::ENCODE_BINARY]));
-
-        $compressed = gzcompress($originalMimePart->toString(['headers' => true]), -1, ZLIB_ENCODING_DEFLATE);
-
-        $zlib = new \Horde_Compress_Fast_Zlib();
-        $compressed = $zlib->compress(file_get_contents($file));
-        */
-
         $compressed = gzcompress(file_get_contents($file));
 
         $part = new MimePart();
@@ -159,42 +148,13 @@ class Adapter
         $part->setEncoding('binary');
         $part->setContent($compressed);
 
-        /*
-        $mimePart = new \Horde_Mime_Part();
-        $mimePart->setType('application/pkcs7-mime');
-        $mimePart->setName('smime.p7z');
-        $mimePart->setContentTypeParameter('smime-type', 'compressed-data');
-        $mimePart->setDisposition('attachment; filename="smime.p7z"');
-        $mimePart->setDescription('S/MIME Compressed Message');
-        $mimePart->setTransferEncoding('binary', ['send' => true]);
-        $mimePart->setContents($compressed);
-        */
-
-
-        //file_put_contents($destinationFile, $mimePart->toString(['headers' => true]));
         file_put_contents(
             $destinationFile,
             $part->getHeaders(PHPAS2Message::EOL_CRLF) . PHPAS2Message::EOL_CRLF
                 . $part->getContent(PHPAS2Message::EOL_CRLF)
         );
 
-        #echo '<pre>' . $mimePart->toString(['headers' => true]) . '</pre><hr />';exit;
-
         return $destinationFile;
-
-        /*
-        $this->exec(
-            'compress',
-            [
-                '-in'  => $file,
-                '-out' => $destinationFile
-            ]
-        );
-
-        //echo '<pre>' . file_get_contents($destinationFile) . '</pre>';exit;
-
-        return $destinationFile;
-        */
     }
 
     /**

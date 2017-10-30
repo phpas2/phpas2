@@ -20,8 +20,6 @@ use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
 use Zend\Mime\Message as MimeMessage;
-use Zend\Mime\Mime;
-use Zend\Mime\Part;
 
 /**
  * Class Request
@@ -38,6 +36,12 @@ class Request extends AbstractMessage
     /** @var Generate MIC checksum of message */
     protected $mic = false;
 
+    /**
+     * Request constructor.
+     *
+     * @param array|null|string $content
+     * @param array $headers
+     */
     public function __construct($content, $headers) {
         if (!($headers instanceof HeaderCollection)) {
             $headerCollection = new HeaderCollection();
@@ -177,6 +181,11 @@ class Request extends AbstractMessage
         return $returnVal;
     }
 
+    /**
+     * Check if current message is signed
+     *
+     * @return bool
+     */
     public function isMessageSigned() {
         $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
         $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
@@ -235,22 +244,7 @@ class Request extends AbstractMessage
         }
         while (true);
 
-        // TODO: Calculate MIC checksum with correct algorithm
         $this->mic = $this->adapter->calculateMicChecksum($this->getPath(), 'sha1');
-        /*
-
-        $this->headerCollection = $this->headerCollection->parseContent(file_get_contents($this->getPath()));
-        $contents = file_get_contents($this->getPath());
-        $delimiter = strpos($contents, Message::EOL_CRLF . Message::EOL_CRLF);
-        if ($delimiter === false) {
-            $delimiter = strpos($contents, Message::EOL_LF . Message::EOL_LF);
-        }
-
-        if ($delimiter !== false) {
-            $contents = trim(substr($contents, $delimiter));
-        }
-        file_put_contents($this->getPath(), $contents);
-        */
 
         return $this;
     }
@@ -325,75 +319,6 @@ class Request extends AbstractMessage
     }
 
     /**
-     * Decrypt message headers
-     *
-     * @param $inputFilename
-     * @param $content
-     * @param $mimeType
-     * @param $structure
-     * @return bool
-     * @throws MessageDecryptionException
-     */
-    protected function decryptMessageHeaders(&$inputFilename, &$content, &$mimeType, &$structure) {
-        $returnValue = false;
-        if (strtolower($mimeType) === 'application/pkcs7-mime') {
-            try {
-                $message = \Horde_Mime_Part::parseMessage($content);
-                $inputFilename = $this->adapter->getTempFilename();
-                file_put_contents($inputFilename, $message->toString(['headers' => true]));
-
-                $this->logger->log(Logger::LEVEL_INFO, 'AS2 Message is encrypted');
-
-                $inputFilename = $this->adapter->decrypt($inputFilename);
-                $returnValue = true;
-
-                $this->logger->log(Logger::LEVEL_INFO, 'Data decrypted using ' . $this->getSendingPartner()->getId() . ' key');
-
-                $decoder = new \Mail_mimeDecode(file_get_contents($inputFilename));
-                $structure = $decoder->decode([
-                    'include_bodies' => false,
-                    'decode_headers' => true,
-                    'decode_bodies'  => false,
-                    'input'          => false
-                ]);
-                $mimeType = $structure->ctype_primary . '/' . $structure->ctype_secondary;
-            }
-            catch (\Exception $e) {
-                throw new MessageDecryptionException($e->getMessage(), MessageDecryptionException::ERROR_DECRYPTION);
-            }
-        }
-
-        return $returnValue;
-    }
-
-    protected function disassembleSignedMessage() {
-        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
-        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
-
-        $signedMessage = '';
-
-        /** @var Part $part */
-        foreach ($message->getParts() as $part) {
-            $headers = $part->getHeadersArray();
-            $contentType = null;
-            foreach ($headers as $pair) {
-                if (strtolower($pair[0]) == 'content-type') {
-                    if (!preg_match('/application\/(?:x-)?pkcs7-signature/', $pair[1])) {
-                        $signedMessage .= Mime::LINEEND . $part->getHeaders() . Mime::LINEEND . $part->getContent();
-                    }
-                }
-            }
-        }
-
-        $signedMessage = trim($signedMessage) . Mime::LINEEND;
-
-        $destinationFile = $this->adapter->getTempFilename();
-        file_put_contents($destinationFile, $signedMessage);
-
-        $this->setPath($destinationFile);
-    }
-
-    /**
      * Verify the message contents based on the signature
      *
      * @return $this
@@ -431,53 +356,5 @@ class Request extends AbstractMessage
         $this->setPath($verifiedFile);
 
         return $this;
-    }
-
-    /**
-     * Verify the signature of the message
-     *
-     * @param $input
-     * @param $mimeType
-     * @param $structure
-     * @param $mic
-     * @return bool
-     */
-    protected function verifySignature(&$input, &$mimeType, &$structure, &$mic) {
-        $returnValue = false;
-
-        if (strtolower($mimeType) === 'multipart/signed') {
-            try {
-                $this->logger->log(Logger::LEVEL_INFO, 'AS2 message is signed');
-                $mic = $this->adapter->getMicChecksum($input);
-                $input = $this->adapter->verify($input);
-                $returnValue = true;
-
-                $this->logger->log(
-                    Logger::LEVEL_INFO,
-                    sprintf(
-                        'The sender used the algorithm %s to sign the message',
-                        $structure->ctype_parameters['micalg']
-                    )
-                );
-
-                $decoder = new \Mail_mimeDecode(file_get_contents($input));
-                $structure = $decoder->decode([]);
-                $mimeType = $structure->ctype_primary . '/' . $structure->ctype_secondary;
-
-                $this->logger->log(
-                    Logger::LEVEL_INFO,
-                    sprintf(
-                        'Using certificate %s to verify signature',
-                        $this->getSendingPartner()->getId()
-                    )
-                );
-            }
-            catch (\Exception $e) {
-            }
-        } else {
-            $mic = $this->adapter->calculateMicChecksum($input, 'sha1');
-        }
-
-        return $returnValue;
     }
 }
