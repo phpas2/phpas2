@@ -139,13 +139,12 @@ class Server
                 }
                 */
                 $this->saveMessage($request->getContents(), $request->getHeaders(), '', self::MESSAGE_DECRYPTED);
-                exit;
             }
             else if (!($request instanceof Request)) {
                 throw new InvalidMessageException('Unexpected error occurred while handling AS2 message: bad format');
             }
             else {
-                $this->Headers = $request->getHeaders();
+                $this->headers = $request->getHeaders();
             }
 
             $object = $request->getObject();
@@ -174,19 +173,21 @@ class Server
                     )
                 );
 
+                $filename  = pathinfo($filename, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR . pathinfo($filename, PATHINFO_FILENAME);
+
                 foreach ($files as $key => $file) {
                     $content = file_get_contents($file['path']);
                     $this->logger->log(
                         Logger::LEVEL_INFO,
                         sprintf(
-                            'Payload #%d : %f KB / "%s"',
+                            'Payload #%d : %0.2f KB / Filename: "%s"',
                             $key + 1,
                             round(strlen($content) / 1024, 2),
                             $file['filename']
                         )
                     );
 
-                    $this->saveMessage($content, [], $filename . '.payload-' . $key, self::MESSAGE_PAYLOAD);
+                    $this->saveMessage($content, null, $filename, self::MESSAGE_PAYLOAD, $key);
                 }
 
                 $this->mdn = $object->generateMDN();
@@ -326,26 +327,27 @@ class Server
      * @param string $type Values: raw | decrypted | payload
      * @return string
      */
-    protected function saveMessage($data, HeaderCollection $headers, $filename='', $type=self::MESSAGE_RAW, $payloadCount=0) {
-        $dir = $this->adapter->getMessagesDir('inbox');
+    protected function saveMessage($data, HeaderCollection $headers=null, $filename='', $type=self::MESSAGE_RAW, $payloadCount=0) {
         if (!$filename) {
+            $dir = $this->adapter->getMessagesDir('inbox');
+
             list($micro, ) = explode(' ', microtime());
             $micro = str_pad(round($micro * 1000), 3, '0');
             $host = ($_SERVER['REMOTE_ADDR'] ? $_SERVER['REMOTE_ADDR'] : 'unknownhost');
-            $filename = date('YmdHis') . '-' . $micro . '_' . $host . '.as2';
+            $filename = $dir . date('YmdHis') . '-' . $micro . '_' . $host . '.as2';
         }
 
-        $filename = $dir . $filename;
+        if ($headers instanceof HeaderCollection) {
+            $data = $headers->toString(Message::EOL_CRLF) . Message::EOL_CRLF . Message::EOL_CRLF . $data;
+        }
 
         switch ($type) {
             case self::MESSAGE_RAW:
                 $filename .= '.raw';
-                $data = $headers->toString() . MimeMessage::LINEEND . MimeMessage::LINEEND . $data;
                 break;
 
             case self::MESSAGE_DECRYPTED:
                 $filename .= '.decrypted';
-                $data = $headers->toString() . MimeMessage::LINEEND . MimeMessage::LINEEND . $data;
                 break;
 
             case self::MESSAGE_PAYLOAD:

@@ -23,6 +23,7 @@ use PHPAS2\Exception\UnknownAuthenticationMethodException;
 use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Exception\UnverifiedMessageException;
 use PHPAS2\Logger;
+use PHPAS2\Message as PHPAS2Message;
 use PHPAS2\Partner;
 use phpseclib\File\ASN1;
 use Zend\Mime\Message;
@@ -171,7 +172,11 @@ class Adapter
 
 
         //file_put_contents($destinationFile, $mimePart->toString(['headers' => true]));
-        file_put_contents($destinationFile, $part->getHeaders() . "\n\n" . $part->getContent());
+        file_put_contents(
+            $destinationFile,
+            $part->getHeaders(PHPAS2Message::EOL_CRLF) . PHPAS2Message::EOL_CRLF
+                . $part->getContent(PHPAS2Message::EOL_CRLF)
+        );
 
         #echo '<pre>' . $mimePart->toString(['headers' => true]) . '</pre><hr />';exit;
 
@@ -302,9 +307,14 @@ class Adapter
         /*
          * This is necessary for Mendelson AS2 server.  They don't seem to like the "x-pkcs7-mime" content type.
          * Will just keep it this way for all AS2 partners.
+         *
+         * TODO: Verify this is actually correct
          */
         $contents = file_get_contents($returnValue);
         $contents = str_replace('application/x-pkcs7-mime', 'application/pkcs7-mime', $contents);
+
+        $contents = str_replace(PHPAS2Message::EOL_CR, "", $contents);
+        $contents = str_replace(PHPAS2Message::EOL_LF, PHPAS2Message::EOL_CRLF, $contents);
 
         file_put_contents($returnValue, $contents);
 
@@ -397,7 +407,7 @@ class Adapter
             foreach ($message->getParts() as $part) {
                 $destinationFile = $this->getTempFilename();
 
-                file_put_contents($destinationFile, $part->getContent());
+                file_put_contents($destinationFile, $part->getRawContent());
 
                 $files[] = [
                     'path' => $destinationFile,
@@ -410,6 +420,8 @@ class Adapter
             $destinationFile = $this->getTempFilename();
 
             $part = $message->getParts()[0];
+
+            file_put_contents($destinationFile, $part->getRawContent());
 
             $files[] = [
                 'path' => $destinationFile,
@@ -812,6 +824,14 @@ class Adapter
         unset($output);
 
         /*
+         * Convert single Newline to CRLF endings (for MIME)
+         */
+        $contents = file_get_contents($destinationFile);
+        $contents = str_replace(PHPAS2Message::EOL_CR, "", $contents);
+        $contents = str_replace(PHPAS2Message::EOL_LF, PHPAS2Message::EOL_CRLF, $contents);
+        file_put_contents($destinationFile, $contents);
+
+        /*
         // TODO: Revert to the PHP version once changing the algorithm is allowed with openssl_pkcs7_sign
         $headers = [];
 
@@ -841,6 +861,12 @@ class Adapter
         if (!$result) {
             throw new UnsignedMessageException('Failed to sign message: "' . openssl_error_string() . '"');
         }
+
+        /*
+        copy($destinationFile, '/media/mac-share/sandbox/cocoavia-shared/as2-message.signed-og');
+        echo $this->sendingPartner->getId() . PHP_EOL;
+        exit;
+        */
 
         return $destinationFile;
     }

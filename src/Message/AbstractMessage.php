@@ -41,8 +41,6 @@ abstract class AbstractMessage
     /** @var boolean */
     protected $isEncrypted;
     /** @var boolean */
-    protected $isMdn;
-    /** @var boolean */
     protected $isSigned;
     /** @var Logger */
     protected $logger;

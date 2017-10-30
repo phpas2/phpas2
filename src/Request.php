@@ -36,7 +36,7 @@ class Request extends AbstractMessage
     /** @var HeaderCollection */
     protected $headerCollection;
     /** @var Generate MIC checksum of message */
-    protected $mic;
+    protected $mic = false;
 
     public function __construct($content, $headers) {
         if (!($headers instanceof HeaderCollection)) {
@@ -124,52 +124,27 @@ class Request extends AbstractMessage
      * @return MessageDispositionNotification|Message
      */
     public function getObject() {
-        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
-        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
-
-        $this->isSigned = false;
-        $this->isMdn = false;
-        /** @var \Zend\Mime\Part $part */
-        foreach ($message->getParts() as $part) {
-            $headers = $part->getHeadersArray();
-            $contentType = null;
-            foreach ($headers as $pair) {
-                if (strtolower($pair[0]) == 'content-type') {
-                    $contentType = $pair[1];
-                    break;
-                }
-            }
-            if (preg_match('/application\/(?:x-)?pkcs7-signature/', $contentType)) {
-                $this->isSigned = true;
-            }
-            else if (preg_match('/multipart\/report/', $contentType)) {
-                $this->isMdn = true;
-            }
+        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()));
+        $isMdn = false;
+        if ($message->getPartHeadersArray(0)['Content-Type'] == 'multipart/report') {
+            $isMdn = true;
         }
-
-        if ($this->isSigned) {
-            $this->verifyMessageSignature();
-        }
-
-        $boundary = $this->getAdapter()->parseMessageBoundary($this->getPath());
-        $message = MimeMessage::createFromMessage(file_get_contents($this->getPath()), $boundary);
-        $micChecksum = $this->adapter->getMicChecksum($this->getPath());
 
         $params = [
             'is_file'           => false,
-            'mic'               => $micChecksum,
+            'mic'               => $this->mic,
             'receiving_partner' => $this->getReceivingPartner(),
             'sending_partner'   => $this->getSendingPartner()
         ];
 
-        if ($this->isMdn) {
+        if ($isMdn) {
             $returnVal = new MessageDispositionNotification(null, $params);
         }
         else {
             $returnVal = new Message($message, $params);
         }
 
-        $returnVal->getHeaders()->addHeaders($this->getHeaders());
+        //$returnVal->getHeaders()->addHeaders($this->getHeaders());
         return $returnVal;
     }
 
@@ -260,7 +235,22 @@ class Request extends AbstractMessage
         }
         while (true);
 
-        // $this->mic = $this->adapter->calculateMicChecksum($this->getPath(), 'sha1');
+        // TODO: Calculate MIC checksum with correct algorithm
+        $this->mic = $this->adapter->calculateMicChecksum($this->getPath(), 'sha1');
+        /*
+
+        $this->headerCollection = $this->headerCollection->parseContent(file_get_contents($this->getPath()));
+        $contents = file_get_contents($this->getPath());
+        $delimiter = strpos($contents, Message::EOL_CRLF . Message::EOL_CRLF);
+        if ($delimiter === false) {
+            $delimiter = strpos($contents, Message::EOL_LF . Message::EOL_LF);
+        }
+
+        if ($delimiter !== false) {
+            $contents = trim(substr($contents, $delimiter));
+        }
+        file_put_contents($this->getPath(), $contents);
+        */
 
         return $this;
     }
@@ -399,7 +389,7 @@ class Request extends AbstractMessage
 
         $destinationFile = $this->adapter->getTempFilename();
         file_put_contents($destinationFile, $signedMessage);
-        // file_put_contents('/media/mac-share/sandbox/cocoavia-shared/as2-message.unsigned', $signedMessage);
+
         $this->setPath($destinationFile);
     }
 
@@ -412,31 +402,29 @@ class Request extends AbstractMessage
     protected function verifyMessageSignature() {
         $verifiedFile = $this->getAdapter()->getTempFilename();
 
-        copy($this->getPath(), '/media/mac-share/sandbox/cocoavia-shared/as2-message.signed');
-
         $result = openssl_pkcs7_verify(
             $this->getPath(),
-            PKCS7_NOVERIFY|PKCS7_BINARY,
-            '',
-            [$this->getSendingPartner()->getPublicCertFile()],
+            PKCS7_NOVERIFY|PKCS7_BINARY|PKCS7_NOINTERN,
+            '/dev/null',
+            [],
             $this->getSendingPartner()->getPublicCertFile(),
             $verifiedFile
         );
 
         $errorString = '';
         while ($err = openssl_error_string()) {
-            $errorString .= $err . Mime::LINEEND;
+            $errorString .= $err . Message::EOL_CRLF;
         }
         $errorString = trim($errorString);
 
         if ($result === false) {
             throw new UnverifiedMessageException(
-                'Message was tampered with or signing certificate is invalid:' . Mime::LINEEND . $errorString
+                'Message was tampered with or signing certificate is invalid:' . Message::EOL_CRLF . $errorString
             );
         }
         else if ($result !== true) {
             throw new UnverifiedMessageException(
-                'Signed message failed signature check:' . Mime::LINEEND . $errorString
+                'Signed message failed signature check:' . Message::EOL_CRLF . $errorString
             );
         }
 

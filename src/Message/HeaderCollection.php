@@ -9,6 +9,8 @@
 
 namespace PHPAS2\Message;
 
+use PHPAS2\Message;
+
 /**
  * Class HeaderCollection
  *
@@ -220,13 +222,37 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      */
     public function parseContent($content) {
         $returnVal = new HeaderCollection();
-        $delimiter = strpos($content, "\n\n");
+
+        $delimiter = strpos($content, Message::EOL_LF . Message::EOL_LF);
+        if ($delimiter === false) {
+            $delimiter = strpos($content, Message::EOL_CRLF . Message::EOL_CRLF);
+        }
+
         if ($delimiter !== false) {
             $content = substr($content, 0, $delimiter);
         }
-        $content = rtrim($content, "\n");
+        $content = rtrim($content, "\r\n");
         $headers = [];
-        preg_match_all('/(.*?):\s*(.*?\n(\s.*?\n)*)/', $content, $headers);
+
+        $lines = explode(Message::EOL_LF, $content);
+        foreach ($lines as $line) {
+            $matches = [];
+            if (preg_match('/(.*?):\s*(.*)/', $line, $matches)) {
+                $headers[$matches[1]] = trim($matches[2], "\r\n");
+                $header = $matches[1];
+            }
+            else {
+                $headers[$header] .= ' ' . rtrim(trim($line), "\r\n");
+            }
+        }
+
+        if ($headers) {
+            $returnVal->addHeaders($headers);
+        }
+
+
+        /*
+        preg_match_all('/(.*?):\s*(.*?\R(\s.*?\R)*)/', $content, $headers);
         if ($headers) {
             foreach ($headers[2] as $key => $value) {
                 $headers[2][$key] = trim(str_replace(["\r", "\n"], ' ', $value));
@@ -235,6 +261,7 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
                 $returnVal->addHeaders(array_combine($headers[1], $headers[2]));
             }
         }
+        */
         return $returnVal;
     }
 

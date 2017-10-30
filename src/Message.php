@@ -27,6 +27,10 @@ use Zend\Mime\Part;
  */
 class Message extends AbstractMessage
 {
+    const EOL_CR   = "\r";
+    const EOL_CRLF = "\r\n";
+    const EOL_LF   = "\n";
+
     /** @var string|null Message MIC checksum */
     protected $micChecksum;
     /** @var bool|string Path to message on filesystem */
@@ -46,11 +50,14 @@ class Message extends AbstractMessage
         }
         else if ($data instanceof MimeMessage) {
             $this->path = $this->adapter->getTempFilename();
-            file_put_contents($this->path, $data->generateMessage());
-        }
-        else if ($data instanceof \Horde_Mime_Part) {
-            $this->path = $this->adapter->getTempFilename();
-            file_put_contents($this->path, $data->toString(true));
+            if ($data->isMultiPart()) {
+                file_put_contents($this->path, $data->generateMessage(self::EOL_CRLF));
+            }
+            else {
+                $contents = $data->getPartHeaders(0, self::EOL_CRLF) . self::EOL_CRLF;
+                $contents .= $data->getPartContent(0, self::EOL_CRLF);
+                file_put_contents($this->path, $contents);
+            }
         }
         else if ($data) {
             if (!array_key_exists('is_file', $params) || $params['is_file']) {
@@ -61,7 +68,7 @@ class Message extends AbstractMessage
             }
         }
 
-        if (array_key_exists('mic', $params)) {
+        if (array_key_exists('mic', $params) && $params['mic']) {
             $this->micChecksum = $params['mic'];
         }
     }
@@ -145,16 +152,15 @@ class Message extends AbstractMessage
             }
 
             if (!$mimePart->isMultiPart()) {
-                $messageContent = $mimePart->getPartHeaders(0) . Mime::LINEEND . Mime::LINEEND;
-                $messageContent .= $mimePart->getPartContent(0);
+                $messageContent = $mimePart->getPartHeaders(0, Message::EOL_CRLF) . Message::EOL_CRLF;
+                $messageContent .= $mimePart->getPartContent(0, Message::EOL_CRLF);
             }
             else {
-                $messageContent = $mimePart->generateMessage();
+                $messageContent = $mimePart->generateMessage(self::EOL_CRLF);
             }
 
             $file = $this->adapter->getTempFilename();
-
-            file_put_contents($file, trim($messageContent));
+            file_put_contents($file, $messageContent);
         }
         catch (\Exception $e) {
             $this->logger->log(
@@ -231,12 +237,10 @@ class Message extends AbstractMessage
         /*
          * Strip the S/MIME headers of the content since they're already in the message headers
          */
-        $headerSeparator = strpos($content, "\n\n");
+        $headerSeparator = strpos($content, Message::EOL_CRLF . Message::EOL_CRLF);
         if ($headerSeparator !== false) {
             $content = substr($content, $headerSeparator + 2);
         }
-
-        copy($this->path, '/media/mac-share/sandbox/as2-message.p7m');
 
         file_put_contents($this->path, trim($content) . "\n");
 
