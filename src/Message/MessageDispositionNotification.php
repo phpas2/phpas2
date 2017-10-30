@@ -208,6 +208,8 @@ class MessageDispositionNotification extends AbstractMessage
         $mdn->setType('message/disposition-notification')
             ->setEncoding(Mime::ENCODING_7BIT);
 
+        $container->addPart($mdn);
+
         $this->setMessageId($this->generateMessageId(Message::TYPE_SENDING));
 
         $this->getHeaders()->addHeaders([
@@ -225,7 +227,6 @@ class MessageDispositionNotification extends AbstractMessage
                 'AS2-From'                    => $this->getSendingPartner()->getId(true),
                 'From'                        => $this->getSendingPartner()->getEmail(),
                 'Subject'                     => $this->getSendingPartner()->getMdnSubject(),
-                // 'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl()
             ]);
         }
 
@@ -246,6 +247,7 @@ class MessageDispositionNotification extends AbstractMessage
 
         $this->setPath($this->adapter->getTempFilename());
 
+        // If a signed MDN is expected, let's sign it
         if ($message && $message->getHeaders()->getHeader('Disposition-Notification-Options')) {
             file_put_contents($this->getPath(), $containerHeaders->__toString() . PHP_EOL . $container->generateMessage());
             $this->setPath($this->adapter->sign($this->getPath()));

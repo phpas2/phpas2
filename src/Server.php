@@ -129,15 +129,6 @@ class Server
 
                 $request->processMessage();
 
-                /*
-                $decrypted = $request->decrypt();
-                if ($decrypted) {
-                    $content = file_get_contents($decrypted);
-                    $headers = new HeaderCollection();
-
-                    $request->setPath($this->adapter->getMessagesDir('inbox') . $filename.'.decrypted');
-                }
-                */
                 $this->saveMessage($request->getContents(), $request->getHeaders(), '', self::MESSAGE_DECRYPTED);
             }
             else if (!($request instanceof Request)) {
@@ -173,7 +164,8 @@ class Server
                     )
                 );
 
-                $filename  = pathinfo($filename, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR . pathinfo($filename, PATHINFO_FILENAME);
+                $filename  = pathinfo($filename, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR
+                             . pathinfo($filename, PATHINFO_FILENAME);
 
                 foreach ($files as $key => $file) {
                     $content = file_get_contents($file['path']);
