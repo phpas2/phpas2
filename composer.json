@@ -1,0 +1,26 @@
+{
+  "name": "phpas2/phpas2",
+  "description": "Implementation of AS2Secure for PHP 7.x and composer-based projects.",
+  "authors": [
+    {
+      "name": "Brett P.",
+      "email": "bap14@users.noreply.github.com",
+      "role": "Developer"
+    }
+  ],
+  "license": "GPL-3.0",
+  "support": {
+    "issues": "https://github.com/phpas2/phpas2/issues"
+  },
+  "require": {
+    "php": "^7.0",
+    "ext-ctype": "*",
+    "ext-openssl": "*",
+    "ext-zlib": "*",
+    "zendframework/zend-mime": "^2.7.1",
+    "phpseclib/phpseclib": "^2.0.1"
+  },
+  "autoload": {
+    "psr-4": { "PHPAS2\\": "src/" }
+  }
+}
