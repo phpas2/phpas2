@@ -251,7 +251,7 @@ class MessageDispositionNotification extends AbstractMessage
      *
      * @return null|string
      */
-w
+
     public function getUrl()
     {
         return $this->url;
