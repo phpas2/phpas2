@@ -35,7 +35,8 @@ class Server
      *
      * @param string $receivingPartnerId Partner ID this server is to act on behalf of.
      */
-    public function __construct($receivingPartnerId) {
+    public function __construct($receivingPartnerId)
+    {
         $this->adapter = new Adapter();
         // $this->logger = Logger::getInstance();
         $this->receivingPartner = new Partner();
@@ -51,7 +52,8 @@ class Server
      * @throws InvalidMessageException
      * @throws InvalidPartnerException
      */
-    public function processRequest($request = null) {
+    public function processRequest($request = null)
+    {
         ob_start();
         $error = null;
         $object = null;
@@ -97,22 +99,21 @@ class Server
                     Logger::LEVEL_INFO,
                     sprintf(
                         'Incoming AS2 message transmission.  Raw message size: %0.2f KB',
-                        round(strlen($data)/1024, 2)
+                        round(strlen($data) / 1024, 2)
                     ),
                     $this->headers->getHeader('message-id')
                 );
                 $request->processMessage();
                 $this->saveMessage($request->getContents(), $request->getHeaders(), '', self::MESSAGE_DECRYPTED);
-            }
-            else if (!($request instanceof Request)) {
-                throw new InvalidMessageException('Unexpected error occurred while handling AS2 message: bad format');
-            }
-            else {
-                $this->headers = $request->getHeaders();
+            } else {
+                if (!($request instanceof Request)) {
+                    throw new InvalidMessageException('Unexpected error occurred while handling AS2 message: bad format');
+                } else {
+                    $this->headers = $request->getHeaders();
+                }
             }
             $object = $request->getObject();
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             $error = $e;
         }
         if ($object instanceof Message || (!is_null($error) && !($object instanceof MessageDispositionNotification))) {
@@ -132,7 +133,7 @@ class Server
                         (count($files) == 1 ? '' : 's')
                     )
                 );
-                $filename  = pathinfo($filename, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR
+                $filename = pathinfo($filename, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR
                     . pathinfo($filename, PATHINFO_FILENAME);
                 foreach ($files as $key => $file) {
                     $content = file_get_contents($file['path']);
@@ -149,8 +150,7 @@ class Server
                 }
                 $this->mdn = $object->generateMDN();
                 $this->mdn->encode($object);
-            }
-            catch (\Exception $e) {
+            } catch (\Exception $e) {
                 $this->mdn = new MessageDispositionNotification();
                 $this->mdn->setMessage($e->getMessage())
                     ->setSendingPartner($this->headers->getHeader('as2-from'))
@@ -158,13 +158,13 @@ class Server
                     ->setAttribute('original-message-id', $this->headers->getHeader('message-id'));
                 $this->mdn->encode();
             }
-        }
-        else if ($object instanceof MessageDispositionNotification) {
-            $objectType = self::TYPE_MDN;
-            $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is an MDN');
-        }
-        else {
-            $this->logger->log(Logger::LEVEL_ERROR, 'Malformed data');
+        } else {
+            if ($object instanceof MessageDispositionNotification) {
+                $objectType = self::TYPE_MDN;
+                $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is an MDN');
+            } else {
+                $this->logger->log(Logger::LEVEL_ERROR, 'Malformed data');
+            }
         }
         if ($error === null) {
             try {
@@ -190,8 +190,7 @@ class Server
                         // TODO: Call "onSent" method
                     }
                 }
-            }
-            catch (\Exception $e) {
+            } catch (\Exception $e) {
                 $error = $e;
             }
         }
@@ -200,8 +199,7 @@ class Server
             $this->mdn->setSendingPartner($this->headers->getHeader('as2-to'))
                 ->setReceivingPartner($this->headers->getHeader('as2-from'))
                 ->setAttribute('original-message-id', $this->headers->getHeader('message-id'))
-                ->getHeaders()->addHeader('Original-Message-Id', $this->headers->getHeader('message-id'))
-            ;
+                ->getHeaders()->addHeader('Original-Message-Id', $this->headers->getHeader('message-id'));
             $this->mdn->encode();
         }
         return $request;
@@ -212,25 +210,24 @@ class Server
      *
      * @return void
      */
-    public function sendResponse() {
+    public function sendResponse()
+    {
         if (!is_null($this->mdn)) {
             if (!$this->headers->getHeader('receipt-delivery-option')) {
                 ob_end_clean();
                 foreach ($this->mdn->getHeaders() as $key => $value) {
-                    $header = str_replace(array("\r", "\n", "\r\n"), '', $key . ': ' . $value);
+                    $header = str_replace(["\r", "\n", "\r\n"], '', $key . ': ' . $value);
                     header($header);
                 }
                 echo $this->mdn->getContents();
                 $this->logger->log(Logger::LEVEL_INFO, 'An AS2 MDN has been sent synchronously');
-            }
-            else {
+            } else {
                 $this->closeConnectionAndWait(5);
                 $client = new Client();
                 $result = $client->sendRequest($this->mdn);
                 if ($result['info']['http_code'] == '200') {
                     $this->logger->log(Logger::LEVEL_INFO, 'An AS2 MDN has been sent asynchronously');
-                }
-                else {
+                } else {
                     $this->logger->log(
                         Logger::LEVEL_ERROR,
                         sprintf(
@@ -248,7 +245,8 @@ class Server
      *
      * @param integer $sleep Number of seconds to wait before sending MDN
      */
-    protected function closeConnectionAndWait($sleep) {
+    protected function closeConnectionAndWait($sleep)
+    {
         ob_end_clean();
         header("Connection: close");
         header("Content-Encoding: none");
@@ -270,12 +268,19 @@ class Server
      * @param HeaderCollection $headers
      * @param string $filename
      * @param string $type Values: raw | decrypted | payload
+     *
      * @return string
      */
-    protected function saveMessage($data, HeaderCollection $headers=null, $filename='', $type=self::MESSAGE_RAW, $payloadCount=0) {
+    protected function saveMessage(
+        $data,
+        HeaderCollection $headers = null,
+        $filename = '',
+        $type = self::MESSAGE_RAW,
+        $payloadCount = 0
+    ) {
         if (!$filename) {
             $dir = $this->adapter->getMessagesDir('inbox');
-            list($micro, ) = explode(' ', microtime());
+            list($micro,) = explode(' ', microtime());
             $micro = str_pad(round($micro * 1000), 3, '0');
             $host = ($_SERVER['REMOTE_ADDR'] ? $_SERVER['REMOTE_ADDR'] : 'unknownhost');
             $filename = $dir . date('YmdHis') . '-' . $micro . '_' . $host . '.as2';

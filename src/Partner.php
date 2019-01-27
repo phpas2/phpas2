@@ -18,17 +18,17 @@ use PHPAS2\Partner\Authentication;
 class Partner
 {
     // Message encryption methods
-    const CRYPT_NONE    = 'none';
+    const CRYPT_NONE = 'none';
     const CRYPT_AES_128 = 'aes128';
     const CRYPT_AES_192 = 'aes192';
     const CRYPT_AES_256 = 'aes256';
-    const CRYPT_DES     = 'des';
-    const CRYPT_3DES    = 'des3';
-    const CRYPT_RC2_40  = 'rc2-40';
-    const CRYPT_RC2_64  = 'rc2-64';
+    const CRYPT_DES = 'des';
+    const CRYPT_3DES = 'des3';
+    const CRYPT_RC2_40 = 'rc2-40';
+    const CRYPT_RC2_64 = 'rc2-64';
     const CRYPT_RC2_128 = 'rc2-128';
-    const CRYPT_RC4_40  = 'rc4-40';
-    const CRYPT_RC4_64  = 'rc4-64';
+    const CRYPT_RC4_40 = 'rc4-40';
+    const CRYPT_RC4_64 = 'rc4-64';
     const CRYPT_RC4_128 = 'rc4-128';
 
     // Message encoding types
@@ -37,12 +37,12 @@ class Partner
 
     // MDN type
     const MDN_ASYNC = 'async';
-    const MDN_SYNC  = 'sync';
+    const MDN_SYNC = 'sync';
 
     // Message signature algorithms
-    const SIGN_NONE   = 'none';
-    const SIGN_MD5    = 'md5';
-    const SIGN_SHA1   = 'sha1';
+    const SIGN_NONE = 'none';
+    const SIGN_MD5 = 'md5';
+    const SIGN_SHA1 = 'sha1';
     const SIGN_SHA256 = 'sha256';
     const SIGN_SHA384 = 'sha384';
     const SIGN_SHA512 = 'sha512';
@@ -77,7 +77,7 @@ class Partner
     /** @var  string */
     protected $secPkcs12;
     /** @var  array */
-    protected $secPkcs12Contents=[];
+    protected $secPkcs12Contents = [];
     /** @var  string */
     protected $secPkcs12Password;
     /** @var  string */
@@ -97,9 +97,10 @@ class Partner
 
     /**
      * Partner constructor.
+     *
      * @param array $data
      */
-    public function __construct(array $data=[])
+    public function __construct(array $data = [])
     {
         $this->setPartnerConfigsDir(
             realpath(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR . 'partners'
@@ -116,7 +117,7 @@ class Partner
     {
         return [
             self::MDN_ASYNC => 'Asynchronous',
-            self::MDN_SYNC  => 'Synchronous'
+            self::MDN_SYNC => 'Synchronous'
         ];
     }
 
@@ -141,17 +142,17 @@ class Partner
     public function getAvailableEncryptionAlgorithms()
     {
         return [
-            self::CRYPT_NONE    => 'None',
+            self::CRYPT_NONE => 'None',
             self::CRYPT_AES_128 => 'AES_128',
             self::CRYPT_AES_192 => 'AES_192',
             self::CRYPT_AES_256 => 'AES_256',
-            self::CRYPT_DES     => 'DES',
-            self::CRYPT_3DES    => '3DES',
-            self::CRYPT_RC2_40  => 'RC2_40',
-            self::CRYPT_RC2_64  => 'RC2_64',
+            self::CRYPT_DES => 'DES',
+            self::CRYPT_3DES => '3DES',
+            self::CRYPT_RC2_40 => 'RC2_40',
+            self::CRYPT_RC2_64 => 'RC2_64',
             self::CRYPT_RC2_128 => 'RC2_128',
-            self::CRYPT_RC4_40  => 'RC4_40',
-            self::CRYPT_RC4_64  => 'RC4_64',
+            self::CRYPT_RC4_40 => 'RC4_40',
+            self::CRYPT_RC4_64 => 'RC4_64',
             self::CRYPT_RC4_128 => 'RC4_128'
         ];
     }
@@ -164,9 +165,9 @@ class Partner
     public function getAvailableSignatureAlgorithms()
     {
         return [
-            self::SIGN_NONE   => 'none',
-            self::SIGN_MD5    => 'MD5',
-            self::SIGN_SHA1   => 'SHA1',
+            self::SIGN_NONE => 'none',
+            self::SIGN_MD5 => 'MD5',
+            self::SIGN_SHA1 => 'SHA1',
             self::SIGN_SHA256 => 'SHA256',
             self::SIGN_SHA384 => 'SHA384',
             self::SIGN_SHA512 => 'SHA512'
@@ -230,9 +231,10 @@ class Partner
      * Retrieve Partner ID
      *
      * @param bool $enclosedWithQuotes
+     *
      * @return string
      */
-    public function getId($enclosedWithQuotes=false)
+    public function getId($enclosedWithQuotes = false)
     {
         return sprintf('%s%s%1$s', ($enclosedWithQuotes ? '"' : ''), $this->id);
     }
@@ -244,7 +246,7 @@ class Partner
      */
     public function getIsLocal()
     {
-        return (boolean) $this->isLocal;
+        return (boolean)$this->isLocal;
     }
 
     /**
@@ -274,7 +276,7 @@ class Partner
      */
     public function getMdnSigned()
     {
-        return (boolean) $this->mdnSigned;
+        return (boolean)$this->mdnSigned;
     }
 
     /**
@@ -302,9 +304,11 @@ class Partner
      * return path to that specific partner's configuration directory
      *
      * @param string|null $partnerId
+     *
      * @return string
      */
-    public function getPartnerConfigsDir($partnerId=null) {
+    public function getPartnerConfigsDir($partnerId = null)
+    {
         $returnValue = $this->partnerConfigDir;
         if ($partnerId !== null) {
             $returnValue .= $partnerId . DIRECTORY_SEPARATOR;
@@ -350,110 +354,126 @@ class Partner
         return $this->writeFile($this->getId() . '.cer', trim(file_get_contents($this->getPublicCert())));
     }
 
-    public function getSecCertificate() {
+    public function getSecCertificate()
+    {
         return $this->secCertificate;
     }
 
-    public function getSecCertificateFile() {
+    public function getSecCertificateFile()
+    {
         if (is_file($this->secCertificate)) {
             return $this->secCertificate;
-        }
-        else {
+        } else {
             $this->secCertificate = $this->writeFile($this->getId() . '.cer', $this->getSecCertificate());
             return $this->secCertificate;
         }
     }
 
-    public function getSecEncryptionAlgorithm() {
+    public function getSecEncryptionAlgorithm()
+    {
         return $this->secEncryptionAlgorithm;
     }
 
-    public function getSecPem() {
-        return trim(file_get_contents($this->getPublicCertFile())) . PHP_EOL . trim(file_get_contents($this->getPrivateKeyFile()));
+    public function getSecPem()
+    {
+        return trim(file_get_contents($this->getPublicCertFile())) .
+            PHP_EOL .
+            trim(file_get_contents($this->getPrivateKeyFile()));
     }
 
-    public function getSecPemFile() {
+    public function getSecPemFile()
+    {
         return $this->writeFile($this->getId() . '.pem', $this->getSecPem());
     }
 
-    public function getSecPkcs12() {
+    public function getSecPkcs12()
+    {
         return $this->secPkcs12;
     }
 
-    public function getSecPkcs12Contents() {
+    public function getSecPkcs12Contents()
+    {
         if (ctype_print($this->secPkcs12) && is_file($this->secPkcs12)) {
             return file_get_contents($this->secPkcs12);
-        }
-        else {
+        } else {
             return $this->secPkcs12;
         }
     }
 
-    public function getSecPkcs12File() {
+    public function getSecPkcs12File()
+    {
         if (ctype_print($this->getSecPkcs12()) && is_file($this->getSecPkcs12())) {
             return $this->getSecPkcs12();
-        }
-        else {
+        } else {
             $this->setSecPkcs12($this->writeFile($this->getId() . '.p12', $this->getSecPkcs12()));
             return $this->getSecPkcs12();
         }
     }
 
-    public function getSecSignatureAlgorithm() {
+    public function getSecSignatureAlgorithm()
+    {
         return $this->secSignatureAlgorithm;
     }
 
-    public function getSendAuthentication() {
+    public function getSendAuthentication()
+    {
         return $this->sendAuthentication;
     }
 
-    public function getSendCompress() {
-        return (boolean) $this->sendCompress;
+    public function getSendCompress()
+    {
+        return (boolean)$this->sendCompress;
     }
 
-    public function getSecPkcs12Password() {
+    public function getSecPkcs12Password()
+    {
         return $this->secPkcs12Password;
     }
 
-    public function getSendContentType() {
+    public function getSendContentType()
+    {
         return $this->sendContentType;
     }
 
-    public function getSendEncoding() {
+    public function getSendEncoding()
+    {
         return $this->sendEncoding;
     }
 
-    public function getSendSubject() {
+    public function getSendSubject()
+    {
         return $this->sendSubject;
     }
 
-    public function getSendUrl() {
+    public function getSendUrl()
+    {
         return $this->sendUrl;
     }
 
-    public function loadFromArray(array $data) {
+    public function loadFromArray(array $data)
+    {
         $baseConfig = [
-            'comment'                  => '',
-            'email'                    => '',
-            'id'                       => '',
-            'is_local'                 => false,
-            'name'                     => '',
-            'mdn_authentication'       => new Authentication(),
-            'mdn_request'              => self::MDN_SYNC,
-            'mdn_signed'               => true,
-            'mdn_subject'              => 'AS2 MDN Subject',
-            'mdn_url'                  => '',
-            'sec_certificate'          => '',
+            'comment' => '',
+            'email' => '',
+            'id' => '',
+            'is_local' => false,
+            'name' => '',
+            'mdn_authentication' => new Authentication(),
+            'mdn_request' => self::MDN_SYNC,
+            'mdn_signed' => true,
+            'mdn_subject' => 'AS2 MDN Subject',
+            'mdn_url' => '',
+            'sec_certificate' => '',
             'sec_encryption_algorithm' => self::CRYPT_3DES,
-            'sec_pkcs12'               => '',
-            'sec_pkcs12_password'      => '',
-            'sec_signature_algorithm'  => self::SIGN_SHA1,
-            'send_authentication'      => new Authentication(),
-            'send_compress'            => false,
-            'send_content_type'        => 'application/EDI-Consent',
-            'send_encoding'            => self::ENCODING_BASE64,
-            'send_subject'             => 'AS2 Message Subject',
-            'send_url'                 => ''
+            'sec_pkcs12' => '',
+            'sec_pkcs12_password' => '',
+            'sec_signature_algorithm' => self::SIGN_SHA1,
+            'send_authentication' => new Authentication(),
+            'send_compress' => false,
+            'send_content_type' => 'application/EDI-Consent',
+            'send_encoding' => self::ENCODING_BASE64,
+            'send_subject' => 'AS2 Message Subject',
+            'send_url' => ''
         ];
         $data = array_merge($baseConfig, $data);
         foreach ($data as $key => $value) {
@@ -472,7 +492,8 @@ class Partner
         return $this;
     }
 
-    public function loadFromConfig($partnerID) {
+    public function loadFromConfig($partnerID)
+    {
         $partnerConfig = $this->getPartnerConfigsDir($partnerID) . 'config.php';
         $data = include($partnerConfig);
         $this->loadFromArray($data);
@@ -483,102 +504,132 @@ class Partner
      * Set the message adapter for this partner.
      *
      * @param Message\Adapter $adapter
+     *
      * @return $this
      */
-    public function setAdapter(Message\Adapter $adapter) {
+    public function setAdapter(Message\Adapter $adapter)
+    {
         $this->adapter = $adapter;
         return $this;
     }
+
     /**
      * Set the comment/notes about this partner.
      *
      * @param string $comment
+     *
      * @return $this
      */
-    public function setComment($comment='') {
+    public function setComment($comment = '')
+    {
         $this->comment = $comment;
         return $this;
     }
+
     /**
      * Set partner email address.
      *
      * @param string $email
+     *
      * @return $this
      */
-    public function setEmail($email) {
+    public function setEmail($email)
+    {
         $this->email = $email;
         return $this;
     }
+
     /**
      * Set partner ID. Optionally enclose with quotes.
      *
      * @param string $id
+     *
      * @return $this
      */
-    public function setId($id) {
+    public function setId($id)
+    {
         $this->id = $id;
         return $this;
     }
+
     /**
      * Set whether this partner is hosted by this server (true), or a remote server (false).
      *
      * @param boolean $isLocal
+     *
      * @return $this
      */
-    public function setIsLocal($isLocal) {
-        $this->isLocal = (boolean) $isLocal;
+    public function setIsLocal($isLocal)
+    {
+        $this->isLocal = (boolean)$isLocal;
         return $this;
     }
+
     /**
      * Set the Authentication object for MDN endpoint
      *
      * @param Authentication $authentication
+     *
      * @return $this
      */
-    public function setMdnAuthentication(Authentication $authentication) {
+    public function setMdnAuthentication(Authentication $authentication)
+    {
         $this->mdnAuthentication = $authentication;
         return $this;
     }
+
     /**
      * Set MDN request type.
      *
      * @param string $type
+     *
      * @return $this
      */
-    public function setMdnRequest($type) {
+    public function setMdnRequest($type)
+    {
         $this->mdnRequest = $type;
         return $this;
     }
+
     /**
      * Set whether the MDN is to be signed.
      *
      * @param boolean $signed
+     *
      * @return $this
      */
-    public function setMdnSigned($signed) {
-        $this->mdnSigned = (boolean) $signed;
+    public function setMdnSigned($signed)
+    {
+        $this->mdnSigned = (boolean)$signed;
         return $this;
     }
+
     /**
      * Set subject of MDN message.
      *
      * @param string $subject
+     *
      * @return $this
      */
-    public function setMdnSubject($subject) {
+    public function setMdnSubject($subject)
+    {
         $this->mdnSubject = $subject;
         return $this;
     }
+
     /**
      * Set endpoint to send MDN to.
      *
      * @param string $url
+     *
      * @return $this
      */
-    public function setMdnUrl($url) {
+    public function setMdnUrl($url)
+    {
         $this->mdnUrl = $url;
         return $this;
     }
+
     /**
      * Set the friendly name of the partner.
      *
@@ -586,44 +637,51 @@ class Partner
      *
      * @return $this
      */
-    public function setName($name) {
+    public function setName($name)
+    {
         $this->name = $name;
         return $this;
     }
+
     /**
      * Set the base64 encoded security certificate.
      *
      * @param string $certificate Base64 encoded certificate
+     *
      * @return $this
      * @throws InvalidX509CertificateException
      */
-    public function setSecCertificate($certificate) {
+    public function setSecCertificate($certificate)
+    {
         if (is_file($certificate)) {
             $this->secCertificate = $certificate;
-        }
-        else if (mb_strlen(trim($certificate)) > 0) {
-            $certInfo = openssl_x509_parse($certificate);
-            if (!is_array($certInfo)) {
-                throw new InvalidX509CertificateException(
-                    'Security certificate was not able to be parsed as x509 certificate'
-                );
+        } else {
+            if (mb_strlen(trim($certificate)) > 0) {
+                $certInfo = openssl_x509_parse($certificate);
+                if (!is_array($certInfo)) {
+                    throw new InvalidX509CertificateException(
+                        'Security certificate was not able to be parsed as x509 certificate'
+                    );
+                }
+                unset ($certInfo);
+                $this->secCertificate = $certificate;
+            } else {
+                $this->secCertificate = null;
             }
-            unset ($certInfo);
-            $this->secCertificate = $certificate;
-        }
-        else {
-            $this->secCertificate = null;
         }
         return $this;
     }
+
     /**
      * Set security encryption algorithm.
      *
      * @param string $algorithm
+     *
      * @return $this
      * @throws InvalidEncryptionAlgorithmException
      */
-    public function setSecEncryptionAlgorithm($algorithm) {
+    public function setSecEncryptionAlgorithm($algorithm)
+    {
         if (!in_array($algorithm, array_keys($this->getAvailableEncryptionAlgorithms()))) {
             throw new InvalidEncryptionAlgorithmException(
                 sprintf('Unknown encryption algorithm "%s".', $algorithm)
@@ -632,14 +690,17 @@ class Partner
         $this->secEncryptionAlgorithm = $algorithm;
         return $this;
     }
+
     /**
      * Set PKCS12 bundle.
      *
      * @param string $pkcs12
+     *
      * @return $this
      * @throws Pkcs12BundleException
      */
-    public function setSecPkcs12($pkcs12) {
+    public function setSecPkcs12($pkcs12)
+    {
         $this->secPkcs12Contents = [];
         if (is_file($pkcs12)) {
             $this->secPkcs12 = $pkcs12;
@@ -651,36 +712,44 @@ class Partner
             if ($result === false) {
                 throw new Pkcs12BundleException(sprintf('Unable to read data from PKCS12 bundle "%s"', $pkcs12));
             }
-        } else if (strlen(trim($pkcs12))) {
-            $valid = openssl_pkcs12_read($pkcs12, $this->secPkcs12Contents, $this->getSecPkcs12Password());
-            if (!$valid) {
-                throw new Pkcs12BundleException('Unable to verify PKCS12 bundle');
-            }
-            unset($bundle, $valid);
-            $this->secPkcs12 = $this->writeFile($this->getId() . '.p12', $pkcs12);
         } else {
-            $this->secPkcs12 = null;
+            if (strlen(trim($pkcs12))) {
+                $valid = openssl_pkcs12_read($pkcs12, $this->secPkcs12Contents, $this->getSecPkcs12Password());
+                if (!$valid) {
+                    throw new Pkcs12BundleException('Unable to verify PKCS12 bundle');
+                }
+                unset($bundle, $valid);
+                $this->secPkcs12 = $this->writeFile($this->getId() . '.p12', $pkcs12);
+            } else {
+                $this->secPkcs12 = null;
+            }
         }
         return $this;
     }
+
     /**
      * Get the password for the PKCS12 bundle.
      *
      * @param string $password
+     *
      * @return $this
      */
-    public function setSecPkcs12Password($password) {
+    public function setSecPkcs12Password($password)
+    {
         $this->secPkcs12Password = $password;
         return $this;
     }
+
     /**
      * Get message signature algorithm.
      *
      * @param string $algorithm
+     *
      * @return $this
      * @throws InvalidSignatureAlgorithmException
      */
-    public function setSecSignatureAlgorithm($algorithm) {
+    public function setSecSignatureAlgorithm($algorithm)
+    {
         if (!in_array($algorithm, array_keys($this->getAvailableSignatureAlgorithms()))) {
             throw new InvalidSignatureAlgorithmException(
                 sprintf('Unknown signature algorithm "%s".', $algorithm)
@@ -689,44 +758,56 @@ class Partner
         $this->secSignatureAlgorithm = $algorithm;
         return $this;
     }
+
     /**
      * Set the authentication object for message destination.
      *
      * @param Authentication $authentication
+     *
      * @return $this
      */
-    public function setSendAuthentication(Authentication $authentication) {
+    public function setSendAuthentication(Authentication $authentication)
+    {
         $this->sendAuthentication = $authentication;
         return $this;
     }
+
     /**
      * Set flag to compress the data or not.
      *
      * @param boolean $compress
+     *
      * @return $this
      */
-    public function setSendCompress($compress) {
+    public function setSendCompress($compress)
+    {
         $this->sendCompress = $compress;
         return $this;
     }
+
     /**
      * Set content-type of message.
      *
      * @param string $contentType
+     *
      * @return $this
      */
-    public function setSendContentType($contentType) {
+    public function setSendContentType($contentType)
+    {
         $this->sendContentType = $contentType;
         return $this;
     }
+
     /**
      * Set encoding of message.
      *
      * @param string $encoding
+     *
      * @return $this
      * @throws InvalidEncodingException
      */
-    public function setSendEncoding($encoding) {
+    public function setSendEncoding($encoding)
+    {
         if (!in_array($encoding, array_keys($this->getAvailableEncodingMethods()))) {
             throw new InvalidEncodingException(
                 sprintf('Unsupported encoding "%s"', $encoding),
@@ -736,26 +817,33 @@ class Partner
         $this->sendEncoding = $encoding;
         return $this;
     }
+
     /**
      * Set subject of message.
      *
      * @param string $subject
+     *
      * @return $this
      */
-    public function setSendSubject($subject) {
+    public function setSendSubject($subject)
+    {
         $this->sendSubject = $subject;
         return $this;
     }
+
     /**
      * Set the endpoint for message delivery.
      *
      * @param string $url
+     *
      * @return $this
      */
-    public function setSendUrl($url) {
+    public function setSendUrl($url)
+    {
         $this->sendUrl = $url;
         return $this;
     }
+
     /**
      * Set the directory containing partner configuration directories
      *
@@ -763,7 +851,8 @@ class Partner
      *
      * @return $this
      */
-    public function setPartnerConfigsDir($path) {
+    public function setPartnerConfigsDir($path)
+    {
         $this->partnerConfigDir = realpath($path) . DIRECTORY_SEPARATOR;
         return $this;
     }
@@ -772,6 +861,7 @@ class Partner
      * Get a specific element from PKCS12 bundle
      *
      * @param $key
+     *
      * @return mixed
      * @throws Pkcs12BundleException
      */
@@ -782,8 +872,7 @@ class Partner
             $result = openssl_pkcs12_read($this->getSecPkcs12(), $secPkcs12Contents, $this->getSecPkcs12Password());
             if ($result) {
                 $this->secPkcs12Contents = $secPkcs12Contents;
-            }
-            else {
+            } else {
                 throw new Pkcs12BundleException('Unable to read PKCS12 bundle');
             }
         }
@@ -800,10 +889,11 @@ class Partner
      *
      * @param string $filename
      * @param string $contents
+     *
      * @return string
      * @throws InvalidAdapterException
      */
-    protected function writeFile($filename, $contents='')
+    protected function writeFile($filename, $contents = '')
     {
         if (!($this->adapter instanceof Adapter)) {
             throw new InvalidAdapterException('No adapter set, or adapter is not a PHPAS2\Message\Adapter');

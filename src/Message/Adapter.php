@@ -27,7 +27,7 @@ use Zend\Mime\Part;
 
 class Adapter
 {
-    const MIC_MD5  = 'md5';
+    const MIC_MD5 = 'md5';
     const MIC_SHA1 = 'sha1';
 
     /** @var string */
@@ -45,7 +45,7 @@ class Adapter
     /** @var Partner */
     protected $sendingPartner;
     /** @var array */
-    protected static $tmpFiles=null;
+    protected static $tmpFiles = null;
 
     public function __construct()
     {
@@ -57,33 +57,36 @@ class Adapter
      *
      * @param string $filePath Path to file.
      */
-    public function addTempFileForDelete($filePath) {
+    public function addTempFileForDelete($filePath)
+    {
         if (is_null(self::$tmpFiles)) {
             self::$tmpFiles = [];
-            register_shutdown_function(array($this, 'deleteTempFiles'));
+            register_shutdown_function([$this, 'deleteTempFiles']);
         }
         self::$tmpFiles[] = $filePath;
     }
 
     /**
      *
-     * @param $message
+     * @param        $message
      * @param string $algorithm Algorithm to use to calculate MIC Checksum. Default: Adapter::MIC_SHA1.
+     *
      * @return string
      * @throws UnknownAuthenticationMethodException
      */
-    public function calculateMicChecksum($message, $algorithm=self::MIC_SHA1) {
+    public function calculateMicChecksum($message, $algorithm = self::MIC_SHA1)
+    {
         if ($algorithm === self::MIC_SHA1) {
             $fileContents = sha1_file($message);
-        }
-        else if ($algorithm === self::MIC_MD5) {
-            $fileContents = md5_file($message);
-        }
-        else {
-            throw new UnknownAuthenticationMethodException(
-                sprintf('Unknown checksum algorithm "%s"', $algorithm),
-                UnknownAuthenticationMethodException::ERROR_AUTHENTICATION
-            );
+        } else {
+            if ($algorithm === self::MIC_MD5) {
+                $fileContents = md5_file($message);
+            } else {
+                throw new UnknownAuthenticationMethodException(
+                    sprintf('Unknown checksum algorithm "%s"', $algorithm),
+                    UnknownAuthenticationMethodException::ERROR_AUTHENTICATION
+                );
+            }
         }
         return base64_encode($this->hex2bin($fileContents)) . ', ' . $algorithm;
     }
@@ -92,10 +95,12 @@ class Adapter
      * Compose a new message
      *
      * @param array $files Array of paths to files.
+     *
      * @return $this
      * @throws NoFilesProvidedException
      */
-    public function compose(array $files) {
+    public function compose(array $files)
+    {
         /**
          * While inspecting the AS2Secure.jar file, it appears nothing is done with the file(s) during the "compose"
          * action. So a call to self::compose may no longer be necessary.
@@ -107,9 +112,11 @@ class Adapter
      * Compress a file message
      *
      * @param string $file Path to file.
+     *
      * @return bool|string
      */
-    public function compress($file) {
+    public function compress($file)
+    {
         $destinationFile = $this->getTempFilename();
         $compressed = gzcompress(file_get_contents($file));
         $part = new Part();
@@ -131,9 +138,11 @@ class Adapter
      * Decompress file contents.
      *
      * @param string $file Path to file.
+     *
      * @return bool|string
      */
-    public function decompress($file) {
+    public function decompress($file)
+    {
         $destinationFile = $this->getTempFilename();
         $message = Message::createFromMessage(file_get_contents($file));
         $part = $message->getParts()[0];
@@ -145,13 +154,16 @@ class Adapter
     /**
      * Decrypt an incoming encrypted message.
      * @deprecated
+     *
      * @param $file
+     *
      * @return mixed
      * @throws MessageDecryptionException
      * @throws Pkcs12BundleException
      * @throws \PHPAS2\Exception\InvalidAdapterException
      */
-    public function decrypt($file) {
+    public function decrypt($file)
+    {
         $privateKey = $this->receivingPartner->getPrivateKeyFile();
         if (!$privateKey) {
             throw new Pkcs12BundleException('Unable to extract private key from PKCS12 bundle');
@@ -168,7 +180,8 @@ class Adapter
     /**
      * Delete all temporary files at end of session.
      */
-    public function deleteTempFiles() {
+    public function deleteTempFiles()
+    {
         foreach (self::$tmpFiles as $file) {
             @unlink($file);
         }
@@ -178,9 +191,11 @@ class Adapter
      * Get the mime-type of a file.
      *
      * @param string $file Path to file.
+     *
      * @return mixed
      */
-    public function detectMimeType($file) {
+    public function detectMimeType($file)
+    {
         $fileInfo = finfo_open(FILEINFO_MIME);
         $mimeType = finfo_file($fileInfo, $file);
         finfo_close($fileInfo);
@@ -190,18 +205,19 @@ class Adapter
     /**
      * Encrypt a file.
      *
-     * @param string $file The path to the file to encrypt
+     * @param string  $file   The path to the file to encrypt
      * @param integer $cipher The encryption cipher to use (one of the OPENSSL_CIPHER_* constants).
+     *
      * @return string Path to encrypted file
      * @throws InvalidPartnerException
      * @throws MessageEncryptionException
      */
-    public function encrypt($file, $cipher=OPENSSL_CIPHER_3DES) {
+    public function encrypt($file, $cipher = OPENSSL_CIPHER_3DES)
+    {
         $certificate = null;
         if (!$this->receivingPartner->getSecCertificate()) {
             $certificate = $this->receivingPartner->getPublicCertFile();
-        }
-        else {
+        } else {
             $certificate = $this->receivingPartner->getSecCertificateFile();
         }
         if (!$certificate || !is_file($certificate)) {
@@ -238,23 +254,26 @@ class Adapter
     /**
      * Execute the jar file
      * TODO: Replace using java file to execute
-     * @param string $command The command to run on the Jar file
-     * @param array $parameters Array of parameters for the command. Keys are options, values are values. Values are
-     *              automatically escaped. Values with non-string keys (i.e. integer keys) will not be escaped and are
-     *              passed through as-is. To get the parameter string "-in path/to/in.file -out path/to/out.file -flag"
-     *              pass the following:
-     * <pre>
-     * [
-     *   '-in' => 'path/to/in.file'
-     *   '-out' => 'path/to/out.file'
-     *   '-flag'
-     * ]
-     * </pre>
-     * @param bool $returnOutput
+     *
+     * @param string $command    The command to run on the Jar file
+     * @param array  $parameters Array of parameters for the command. Keys are options, values are values. Values are
+     *                           automatically escaped. Values with non-string keys (i.e. integer keys) will not be
+     *                           escaped and are passed through as-is. To get the parameter string "-in path/to/in.file
+     *                           -out path/to/out.file -flag" pass the following:
+     *                           <pre>
+     *                           [
+     *                           '-in' => 'path/to/in.file'
+     *                           '-out' => 'path/to/out.file'
+     *                           '-flag'
+     *                           ]
+     *                           </pre>
+     * @param bool   $returnOutput
+     *
      * @return array|integer|null
      * @throws CommandExecutionException
      */
-    public function exec($command, array $parameters=[], $returnOutput=false) {
+    public function exec($command, array $parameters = [], $returnOutput = false)
+    {
         $command = sprintf(
             '%s -jar %s %s',
             $this->getJavaPath(),
@@ -267,8 +286,7 @@ class Adapter
             $params .= ' ';
             if (is_string($key)) {
                 $params .= sprintf('%s %s', $key, escapeshellarg($value));
-            }
-            else {
+            } else {
                 $params .= escapeshellarg($value);
             }
         }
@@ -298,10 +316,12 @@ class Adapter
      * Extract attachments from message.
      *
      * @param string $file Path to file.
+     *
      * @return array
      * @throws InvalidDataStructureException
      */
-    public function extract($file) {
+    public function extract($file)
+    {
         $files = [];
         $message = Message::createFromMessage(file_get_contents($file));
         if ($message->isMultiPart()) {
@@ -314,8 +334,7 @@ class Adapter
                     'filename' => $part->getFileName()
                 ];
             }
-        }
-        else {
+        } else {
             $destinationFile = $this->getTempFilename();
             $part = $message->getParts()[0];
             file_put_contents($destinationFile, $part->getRawContent());
@@ -336,19 +355,20 @@ class Adapter
      * @return string
      * @throws InvalidSignatureAlgorithmException
      */
-    public function getAlgorithmNameFromOid($oid) {
+    public function getAlgorithmNameFromOid($oid)
+    {
         $algorithms = [
-            '1.2.840.113549.2.5'      => 'md5',
-            '1.3.14.3.2.26'           => 'sha1',
-            '2.16.840.1.101.3.4.1'    => 'aes',
-            '2.16.840.1.101.3.4.1.1'  => 'aes-128-ecb',
-            '2.16.840.1.101.3.4.1.2'  => 'aes-128-cbc',
-            '2.16.840.1.101.3.4.1.3'  => 'aes-128-ofb',
-            '2.16.840.1.101.3.4.1.4'  => 'aes-128-cfb',
-            '2.16.840.1.101.3.4.1.5'  => 'id-aes128-wrap',
-            '2.16.840.1.101.3.4.1.6'  => 'aes-128-gcm',
-            '2.16.840.1.101.3.4.1.7'  => 'aes-128-ccm',
-            '2.16.840.1.101.3.4.1.8'  => 'id-aes128-wrap-pad',
+            '1.2.840.113549.2.5' => 'md5',
+            '1.3.14.3.2.26' => 'sha1',
+            '2.16.840.1.101.3.4.1' => 'aes',
+            '2.16.840.1.101.3.4.1.1' => 'aes-128-ecb',
+            '2.16.840.1.101.3.4.1.2' => 'aes-128-cbc',
+            '2.16.840.1.101.3.4.1.3' => 'aes-128-ofb',
+            '2.16.840.1.101.3.4.1.4' => 'aes-128-cfb',
+            '2.16.840.1.101.3.4.1.5' => 'id-aes128-wrap',
+            '2.16.840.1.101.3.4.1.6' => 'aes-128-gcm',
+            '2.16.840.1.101.3.4.1.7' => 'aes-128-ccm',
+            '2.16.840.1.101.3.4.1.8' => 'id-aes128-wrap-pad',
             '2.16.840.1.101.3.4.1.21' => 'aes-192-ecb',
             '2.16.840.1.101.3.4.1.22' => 'aes-192-cbc',
             '2.16.840.1.101.3.4.1.23' => 'aes-192-ofb',
@@ -365,14 +385,14 @@ class Adapter
             '2.16.840.1.101.3.4.1.46' => 'aes-256-gcm',
             '2.16.840.1.101.3.4.1.47' => 'aes-256-ccm',
             '2.16.840.1.101.3.4.1.48' => 'id-aes256-wrap-pad',
-            '2.16.840.1.101.3.4.2'    => 'nist_hashalgs',
-            '2.16.840.1.101.3.4.2.1'  => 'sha256',
-            '2.16.840.1.101.3.4.2.2'  => 'sha384',
-            '2.16.840.1.101.3.4.2.3'  => 'sha512',
-            '2.16.840.1.101.3.4.2.4'  => 'sha224',
-            '2.16.840.1.101.3.4.3'    => 'dsa_with_sha2',
-            '2.16.840.1.101.3.4.3.1'  => 'dsa_with_SHA224',
-            '2.16.840.1.101.3.4.3.2'  => 'dsa_with_SHA256'
+            '2.16.840.1.101.3.4.2' => 'nist_hashalgs',
+            '2.16.840.1.101.3.4.2.1' => 'sha256',
+            '2.16.840.1.101.3.4.2.2' => 'sha384',
+            '2.16.840.1.101.3.4.2.3' => 'sha512',
+            '2.16.840.1.101.3.4.2.4' => 'sha224',
+            '2.16.840.1.101.3.4.3' => 'dsa_with_sha2',
+            '2.16.840.1.101.3.4.3.1' => 'dsa_with_SHA224',
+            '2.16.840.1.101.3.4.3.2' => 'dsa_with_SHA256'
         ];
         if (!array_key_exists($oid, $algorithms)) {
             throw new InvalidSignatureAlgorithmException(sprintf('Unknown algorithm OID "%s"', $oid));
@@ -385,7 +405,8 @@ class Adapter
      *
      * @return string
      */
-    public function getJarPath() {
+    public function getJarPath()
+    {
         return $this->jarPath;
     }
 
@@ -394,7 +415,8 @@ class Adapter
      *
      * @return string
      */
-    public function getJavaPath() {
+    public function getJavaPath()
+    {
         return $this->javaPath;
     }
 
@@ -402,10 +424,12 @@ class Adapter
      * Get directory to store incoming messages.
      *
      * @param null $path Subdirectories of base messages directory.
+     *
      * @return string
      * @throws InvalidPathException
      */
-    public function getMessagesDir($path=null) {
+    public function getMessagesDir($path = null)
+    {
         $returnValue = $this->getTopDir() . '_messages' . DIRECTORY_SEPARATOR;
         if ($path !== null) {
             $returnValue .= $path . DIRECTORY_SEPARATOR;
@@ -426,7 +450,8 @@ class Adapter
      *
      * @return string
      */
-    public function getMicAlgorithm() {
+    public function getMicAlgorithm()
+    {
         return $this->micAlgorithm;
     }
 
@@ -434,10 +459,12 @@ class Adapter
      * Calculate the MIC Checksum of a file.
      *
      * @param string $file Path to file.
+     *
      * @return bool|string
      * @throws UnsignedMessageException|InvalidSignatureAlgorithmException
      */
-    public function getMicChecksum($file) {
+    public function getMicChecksum($file)
+    {
         $boundary = $this->parseMessageBoundary($file);
         $message = Message::createFromMessage(file_get_contents($file), $boundary);
         $content = $message->getPartContent(0);
@@ -474,7 +501,8 @@ class Adapter
      *
      * @return string
      */
-    public function getOpensslPath() {
+    public function getOpensslPath()
+    {
         return $this->opensslPath;
     }
 
@@ -485,7 +513,8 @@ class Adapter
      *
      * @return string
      */
-    public function getPrivateDir($path=null) {
+    public function getPrivateDir($path = null)
+    {
         $returnValue = $this->getTopDir() . '_private' . DIRECTORY_SEPARATOR;
         if ($path !== null) {
             $returnValue .= $path . DIRECTORY_SEPARATOR;
@@ -498,7 +527,8 @@ class Adapter
      *
      * @return string
      */
-    public static function getServerSignature() {
+    public static function getServerSignature()
+    {
         return self::getSoftwareName() . ' / PHP ' . PHP_VERSION;
     }
 
@@ -507,7 +537,8 @@ class Adapter
      *
      * @return string
      */
-    public static function getSoftwareName() {
+    public static function getSoftwareName()
+    {
         return 'PHPAS2 - PHP Library for AS2 Message Handling';
     }
 
@@ -516,10 +547,11 @@ class Adapter
      *
      * @return bool|string
      */
-    public function getTempFilename() {
+    public function getTempFilename()
+    {
         if (is_null(self::$tmpFiles)) {
             self::$tmpFiles = [];
-            register_shutdown_function(array($this, 'deleteTempFiles'));
+            register_shutdown_function([$this, 'deleteTempFiles']);
         }
         $filename = tempnam(sys_get_temp_dir(), 'phpas2-file_');
         self::$tmpFiles[] = $filename;
@@ -531,7 +563,8 @@ class Adapter
      *
      * @return string
      */
-    public function getTopDir() {
+    public function getTopDir()
+    {
         return realpath(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR;
     }
 
@@ -539,12 +572,14 @@ class Adapter
      * Convert hexadecimal string to binary string.
      *
      * @param string $string String to convert.
+     *
      * @return string
      */
-    public function hex2bin($string) {
+    public function hex2bin($string)
+    {
         $bin = '';
         $characters = str_split($string);
-        for ($i=0; $i<count($characters);) {
+        for ($i = 0; $i < count($characters);) {
             $bin .= chr(hexdec($characters[$i] . $characters[$i + 1]));
             $i += 2;
         }
@@ -559,7 +594,8 @@ class Adapter
      * @return string
      * @throws MimeMessageException
      */
-    public function parseMessageBoundary($file) {
+    public function parseMessageBoundary($file)
+    {
         // boundary="([^\"]+)"
         $fp = fopen($file, 'r');
         $startPos = false;
@@ -583,10 +619,12 @@ class Adapter
      * Set the path to the `AS2Secure.jar` file.
      *
      * @param string $path Path to file.
+     *
      * @return $this
      * @throws InvalidPathException
      */
-    public function setJarPath($path) {
+    public function setJarPath($path)
+    {
         $this->jarPath = $path;
         if (!is_file($this->jarPath)) {
             throw new InvalidPathException(
@@ -600,10 +638,12 @@ class Adapter
      * Set the path to the `java` executable.
      *
      * @param string $path Path to `java` executable.
+     *
      * @return $this
      * @throws InvalidPathException
      */
-    public function setJavaPath($path) {
+    public function setJavaPath($path)
+    {
         $this->javaPath = realpath($path);
         if (!is_file($this->javaPath)) {
             throw new InvalidPathException(
@@ -617,10 +657,12 @@ class Adapter
      * Set the path to Openssl
      *
      * @param $path
+     *
      * @return $this
      * @throws InvalidPathException
      */
-    public function setOpensslPath($path) {
+    public function setOpensslPath($path)
+    {
         $this->opensslPath = realpath($path);
         if (!is_file($this->opensslPath)) {
             throw new InvalidPathException(
@@ -634,9 +676,11 @@ class Adapter
      * Set the receiving partner for the message. Also sets the $adapter on the given partner to this adapter.
      *
      * @param Partner $partner A PHPAS2\Partner object
+     *
      * @return $this
      */
-    public function setReceivingPartner(Partner $partner) {
+    public function setReceivingPartner(Partner $partner)
+    {
         $this->receivingPartner = $partner;
         $this->receivingPartner->setAdapter($this);
         return $this;
@@ -646,9 +690,11 @@ class Adapter
      * Set the sending partner for this message. Also sets the $adapter on the given partner to this adapter.
      *
      * @param Partner $partner
+     *
      * @return $this
      */
-    public function setSendingPartner(Partner $partner) {
+    public function setSendingPartner(Partner $partner)
+    {
         $this->sendingPartner = $partner;
         $this->sendingPartner->setAdapter($this);
         return $this;
@@ -659,14 +705,16 @@ class Adapter
      *
      * TODO: Determine which encodings are valid, provide list of options
      *
-     * @param string $file Path to file.
-     * @param bool $useZlib Use zlip compression.
+     * @param string $file     Path to file.
+     * @param bool   $useZlib  Use zlip compression.
      * @param string $encoding base64, 8bit, 7bit
+     *
      * @return bool|string
      * @throws Pkcs12BundleException
      * @throws UnsignedMessageException
      */
-    public function sign($file, $useZlib=false) {
+    public function sign($file, $useZlib = false)
+    {
         if (!$this->sendingPartner->getSecPkcs12()) {
             throw new Pkcs12BundleException('Missing PKCS12 bundle to sign outgoing messages');
         }
@@ -740,24 +788,27 @@ class Adapter
      * Verify a message
      *
      * @param string $file Path to file.
+     *
      * @return bool|string
      * @throws InvalidMessageException
      * @throws UnverifiedMessageException
      */
-    public function verify($file) {
+    public function verify($file)
+    {
         $destinationFile = $this->getTempFilename();
-        $result = openssl_pkcs7_verify($file, PKCS7_BINARY|PKCS7_DETACHED, $destinationFile);
+        $result = openssl_pkcs7_verify($file, PKCS7_BINARY | PKCS7_DETACHED, $destinationFile);
         if ($result === -1) {
             throw new UnverifiedMessageException(
                 'Error while verifying message: "' . openssl_error_string() . '"',
                 InvalidMessageException::ERROR_INTEGRITY_CHECK
             );
-        }
-        else if ($result === false ) {
-            throw new InvalidMessageException(
-                'Message verification failed.',
-                InvalidMessageException::ERROR_INTEGRITY_CHECK
-            );
+        } else {
+            if ($result === false) {
+                throw new InvalidMessageException(
+                    'Message verification failed.',
+                    InvalidMessageException::ERROR_INTEGRITY_CHECK
+                );
+            }
         }
         $parameters = [];
         if ($this->sendingPartner->getSecPkcs12()) {
@@ -765,11 +816,10 @@ class Adapter
             if ($this->sendingPartner->getSecPkcs12Password()) {
                 $parameters['-password'] = $this->sendingPartner->getSecPkcs12Pasword();
             }
-        }
-        else {
+        } else {
             $parameters['-cert'] = $this->sendingPartner->getSecCertificateFile();
         }
-        $parameters['-in']  = $file;
+        $parameters['-in'] = $file;
         $parameters['-out'] = $destinationFile;
         $parameters[] = '> /dev/null 2&1';
         $this->exec(
