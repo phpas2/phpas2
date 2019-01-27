@@ -17,7 +17,7 @@
     "ext-ctype": "*",
     "ext-curl": "*",
     "ext-fileinfo": "*",
-    "ext-libsodium": "*",
+    "ext-sodium": "*",
     "ext-mbstring": "*",
     "ext-openssl": "*",
     "ext-zlib": "*",
