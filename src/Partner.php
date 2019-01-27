@@ -1,9 +1,6 @@
 <?php
 /**
- * Created by PhpStorm.
- * User: bapat
- * Date: 1/25/2019
- * Time: 11:38 PM
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2;

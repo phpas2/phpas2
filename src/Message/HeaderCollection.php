@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © 2019 phpas2-server. All rights reserved.
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2\Message;
