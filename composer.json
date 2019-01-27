@@ -16,7 +16,7 @@
     "php": "^7.0",
     "ext-ctype": "*",
     "ext-curl": "*",
-    "ext-finfo": "*",
+    "ext-fileinfo": "*",
     "ext-libsodium": "*",
     "ext-mbstring": "*",
     "ext-openssl": "*",
