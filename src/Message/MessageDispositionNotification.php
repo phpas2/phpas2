@@ -6,7 +6,12 @@
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\AbstractException;
+use PHPAS2\Exception\InvalidMessageException;
+use PHPAS2\Exception\MDNFailure;
+use PHPAS2\Exception\UnsignedMessageException;
 use PHPAS2\Message;
+use PHPAS2\Request;
+use PHPAS2\Response;
 use Zend\Mime\Mime;
 use Zend\Mime\Part;
 
@@ -47,7 +52,8 @@ class MessageDispositionNotification extends AbstractMessage
                     ->addHeader('Disposition-Modifier', 'unexpected-processing-error');
             } else {
                 if ($data instanceof Response) {
-                    $headers = array_pop($data->getHeaders());
+                    $headers = $data->getHeaders();
+                    $headers = array_pop($headers);
                     $this->setSendingPartner($headers['as2-from'])
                         ->setReceivingPartner($headers['as2-to'])
                         ->setPath($this->adapter->getTempFilename());
@@ -69,7 +75,7 @@ class MessageDispositionNotification extends AbstractMessage
                             ->setFilename(basename($data->getContents()))
                             ->setMimetype('multipart/report');
                         if ($this->getSendingPartner()->getMdnSigned() && !$data->getIsSigned()) {
-                            throw new UnsignedMdnException('Unsigned MDN received but partner is expecting signed MDN');
+                            throw new UnsignedMessageException('Unsigned MDN received but partner is expecting signed MDN');
                         }
                     } else {
                         if ($data instanceof Message) {
@@ -79,9 +85,9 @@ class MessageDispositionNotification extends AbstractMessage
                             if ($data === null) {
                                 // To handle error notifications
                             } else {
-                                $this->logger->log(
-                                    Logger::LEVEL_ERROR,
+                                $this->logger->error(
                                     'Unknown message type encountered: "' . gettype($data) . '"',
+                                    [],
                                     $this->attributes->getheader('original-message-id')
                                 );
                                 throw new InvalidMessageException(

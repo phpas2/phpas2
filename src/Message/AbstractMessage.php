@@ -6,6 +6,7 @@
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\InvalidPartnerException;
+use PHPAS2\Logger;
 use PHPAS2\Partner;
 
 abstract class AbstractMessage
@@ -73,7 +74,7 @@ abstract class AbstractMessage
      */
     public function __construct($data=null, $params=[]) {
         $this->adapter          = new Adapter();
-        $this->authentication   = new Authentication();
+        $this->authentication   = new Partner\Authentication();
         $this->headerCollection = new HeaderCollection();
         $this->logger           = Logger::getInstance();
         if (is_array($data)) {

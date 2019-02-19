@@ -21,6 +21,7 @@
     "ext-mbstring": "*",
     "ext-openssl": "*",
     "ext-zlib": "*",
+    "zendframework/zend-mail": "^2.10",
     "zendframework/zend-mime": "^2.7",
     "monolog/monolog": "^1.24",
     "phpseclib/phpseclib": "^2.0"

@@ -100,7 +100,7 @@ class Partner
     public function __construct(array $data = [])
     {
         $this->setPartnerConfigsDir(
-            realpath(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR . 'partners'
+            realpath(dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . 'partners')
         );
         $this->loadFromArray($data);
     }
@@ -893,7 +893,7 @@ class Partner
     protected function writeFile($filename, $contents = '')
     {
         if (!($this->adapter instanceof Adapter)) {
-            throw new InvalidAdapterException('No adapter set, or adapter is not a PHPAS2\Message\Adapter');
+            throw new InvalidAdapterException('No adapter set, or adapter is not a \PHPAS2\Message\Adapter');
         }
         $filePath = $this->adapter->getPrivateDir() . $filename;
         $writeNewFile = true;

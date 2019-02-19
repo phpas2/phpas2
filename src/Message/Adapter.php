@@ -6,6 +6,7 @@
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\CommandExecutionException;
+use PHPAS2\Exception\InvalidMessageException;
 use PHPAS2\Exception\InvalidPartnerException;
 use PHPAS2\Exception\InvalidPathException;
 use PHPAS2\Exception\InvalidSignatureAlgorithmException;
@@ -16,6 +17,8 @@ use PHPAS2\Exception\NoFilesProvidedException;
 use PHPAS2\Exception\Pkcs12BundleException;
 use PHPAS2\Exception\UnknownAuthenticationMethodException;
 use PHPAS2\Exception\UnsignedMessageException;
+use PHPAS2\Exception\UnverifiedMessageException;
+use PHPAS2\Message as PHPAS2Message;
 use PHPAS2\Partner;
 use phpseclib\File\ASN1;
 use Zend\Mime\Message;

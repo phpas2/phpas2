@@ -10,6 +10,7 @@ use PHPAS2\Exception\InvalidPartnerException;
 use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
 use PHPAS2\Message\MessageDispositionNotification;
+use Psr\Log\LoggerInterface;
 
 class Server
 {
@@ -34,11 +35,12 @@ class Server
      * Server constructor.
      *
      * @param string $receivingPartnerId Partner ID this server is to act on behalf of.
+     * @param LoggerInterface $logger A separate logger to use instead of default file logger
      */
-    public function __construct($receivingPartnerId)
+    public function __construct($receivingPartnerId, LoggerInterface $logger=null)
     {
         $this->adapter = new Adapter();
-        // $this->logger = Logger::getInstance();
+        $this->logger = Logger::getInstance(['logger' => $logger]);
         $this->receivingPartner = new Partner();
         $this->receivingPartner->loadFromConfig($receivingPartnerId);
     }
@@ -80,27 +82,26 @@ class Server
                 $filename = $this->saveMessage($data, $this->headers, '', self::MESSAGE_RAW);
                 $request = new Request(file_get_contents($filename), $this->headers);
                 if (trim($this->headers->getHeader('as2-from')) === trim($this->headers->getHeader('as2-to'))) {
-                    $this->logger->log(
-                        Logger::LEVEL_WARN,
+                    $this->logger->warn(
                         'The AS2-To and AS2-From are identical',
                         $this->headers->getHeader('message-id')
                     );
                 }
                 $expectedPartnerId = $this->receivingPartner->getId();
                 if ($this->headers->getHeader('as2-to') !== $expectedPartnerId) {
-                    $this->logger->log(
-                        Logger::LEVEL_FATAL,
+                    $this->logger->crit(
                         'Unknown recipient "' . $this->headers->getHeader('as2-to') . '".',
+                        [],
                         $this->headers->getHeader('message-id')
                     );
                     throw new InvalidPartnerException('Unknown AS2 recipient');
                 }
-                $this->logger->log(
-                    Logger::LEVEL_INFO,
+                $this->logger->info(
                     sprintf(
                         'Incoming AS2 message transmission.  Raw message size: %0.2f KB',
                         round(strlen($data) / 1024, 2)
                     ),
+                    [],
                     $this->headers->getHeader('message-id')
                 );
                 $request->processMessage();
@@ -118,15 +119,14 @@ class Server
         }
         if ($object instanceof Message || (!is_null($error) && !($object instanceof MessageDispositionNotification))) {
             $objectType = self::TYPE_MESSAGE;
-            $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is a Message');
+            $this->logger->info( 'Incoming transmission is a Message');
             try {
                 if (!is_null($error)) {
                     throw $error;
                 }
                 $object->decode();
                 $files = $object->getFiles();
-                $this->logger->log(
-                    Logger::LEVEL_INFO,
+                $this->logger->info(
                     sprintf(
                         '%d payload%s found in transmission',
                         count($files),
@@ -137,8 +137,7 @@ class Server
                     . pathinfo($filename, PATHINFO_FILENAME);
                 foreach ($files as $key => $file) {
                     $content = file_get_contents($file['path']);
-                    $this->logger->log(
-                        Logger::LEVEL_INFO,
+                    $this->logger->info(
                         sprintf(
                             'Payload #%d : %0.2f KB / Filename: "%s"',
                             $key + 1,
@@ -161,9 +160,9 @@ class Server
         } else {
             if ($object instanceof MessageDispositionNotification) {
                 $objectType = self::TYPE_MDN;
-                $this->logger->log(Logger::LEVEL_INFO, 'Incoming transmission is an MDN');
+                $this->logger->info('Incoming transmission is an MDN');
             } else {
-                $this->logger->log(Logger::LEVEL_ERROR, 'Malformed data');
+                $this->logger->error('Malformed data');
             }
         }
         if ($error === null) {
@@ -220,16 +219,15 @@ class Server
                     header($header);
                 }
                 echo $this->mdn->getContents();
-                $this->logger->log(Logger::LEVEL_INFO, 'An AS2 MDN has been sent synchronously');
+                $this->logger->info( 'An AS2 MDN has been sent synchronously');
             } else {
                 $this->closeConnectionAndWait(5);
                 $client = new Client();
                 $result = $client->sendRequest($this->mdn);
                 if ($result['info']['http_code'] == '200') {
-                    $this->logger->log(Logger::LEVEL_INFO, 'An AS2 MDN has been sent asynchronously');
+                    $this->logger->info('An AS2 MDN has been sent asynchronously');
                 } else {
-                    $this->logger->log(
-                        Logger::LEVEL_ERROR,
+                    $this->logger->error(
                         sprintf(
                             'An error occurred while sending an MDN: HTTP %s',
                             $result['info']['http_code']

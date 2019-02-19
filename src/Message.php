@@ -6,6 +6,9 @@
 namespace PHPAS2;
 
 use PHPAS2\Message\AbstractMessage;
+use PHPAS2\Message\Adapter;
+use PHPAS2\Message\HeaderCollection;
+use Zend\Mime\Part;
 use Zend\Stdlib\Request;
 
 class Message extends AbstractMessage
@@ -102,7 +105,7 @@ class Message extends AbstractMessage
         $messageId = $this->generateMessageId(AbstractMessage::TYPE_SENDING);
         $this->setMessageId($messageId);
         try {
-            $mimePart = new MimeMessage();
+            $mimePart = new \Zend\Mime\Message();
             foreach ($this->getFiles() as $file) {
                 $part = new Part();
                 $part->setType($file['mimeType'])
@@ -122,9 +125,9 @@ class Message extends AbstractMessage
             $file = $this->adapter->getTempFilename();
             file_put_contents($file, $messageContent);
         } catch (\Exception $e) {
-            $this->logger->log(
-                Logger::LEVEL_ERROR,
+            $this->logger->error(
                 $e->getMessage(),
+                [],
                 $this->getMessageId()
             );
             throw $e;
@@ -138,7 +141,7 @@ class Message extends AbstractMessage
                 $this->isSigned = true;
                 // $this->micChecksum = $this->adapter->getMicChecksum($file);
             } catch (\Exception $e) {
-                $this->logger->log(Logger::LEVEL_ERROR, $e->getMessage(), $this->getMessageId());
+                $this->logger->error($e->getMessage(), [], $this->getMessageId());
                 throw $e;
             }
         }
@@ -147,7 +150,7 @@ class Message extends AbstractMessage
                 $file = $this->adapter->encrypt($file);
                 $this->isEncrypted = true;
             } catch (\Exception $e) {
-                $this->logger->log(Logger::LEVEL_ERROR, $e->getMessage(), $this->getMessageId());
+                $this->logger->error($e->getMessage(), [], $this->getMessageId());
                 throw $e;
             }
         }
