@@ -1,10 +1,6 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2;
@@ -12,24 +8,11 @@ namespace PHPAS2;
 use PHPAS2\Message\AbstractMessage;
 use PHPAS2\Message\Adapter;
 use PHPAS2\Message\HeaderCollection;
-use PHPAS2\Message\MessageDispositionNotification;
-use Zend\Mime\Message as MimeMessage;
 use Zend\Mime\Part;
+use Zend\Stdlib\Request;
 
-/**
- * Class Message
- *
- * @package PHPAS2
- * @author   Brett <bap14@users.noreply.github.com>
- * @license  GPL-3.0
- * @link     https://phpas2.github.io/
- */
 class Message extends AbstractMessage
 {
-    const EOL_CR   = "\r";
-    const EOL_CRLF = "\r\n";
-    const EOL_LF   = "\n";
-
     /** @var string|null Message MIC checksum */
     protected $micChecksum;
     /** @var bool|string Path to message on filesystem */
@@ -39,34 +22,33 @@ class Message extends AbstractMessage
      * Message constructor.
      *
      * @param null|string|Request $data
-     * @param array $params
+     * @param array               $params
      */
-    public function __construct($data = null, array $params = []) {
+    public function __construct($data = null, array $params = [])
+    {
         parent::__construct($data, $params);
-
         if ($data instanceof Request) {
             $this->path = $data->getPath();
+        } else {
+            if ($data instanceof \Zend\Mime\Message) {
+                $this->path = $this->adapter->getTempFilename();
+                if ($data->isMultiPart()) {
+                    file_put_contents($this->path, $data->generateMessage(self::EOL_CRLF));
+                } else {
+                    $contents = $data->getPartHeaders(0, self::EOL_CRLF) . self::EOL_CRLF;
+                    $contents .= $data->getPartContent(0, self::EOL_CRLF);
+                    file_put_contents($this->path, $contents);
+                }
+            } else {
+                if ($data) {
+                    if (!array_key_exists('is_file', $params) || $params['is_file']) {
+                        $this->addFile($data, '', '', true);
+                    } else {
+                        $this->addFile($data, '', '', false);
+                    }
+                }
+            }
         }
-        else if ($data instanceof MimeMessage) {
-            $this->path = $this->adapter->getTempFilename();
-            if ($data->isMultiPart()) {
-                file_put_contents($this->path, $data->generateMessage(self::EOL_CRLF));
-            }
-            else {
-                $contents = $data->getPartHeaders(0, self::EOL_CRLF) . self::EOL_CRLF;
-                $contents .= $data->getPartContent(0, self::EOL_CRLF);
-                file_put_contents($this->path, $contents);
-            }
-        }
-        else if ($data) {
-            if (!array_key_exists('is_file', $params) || $params['is_file']) {
-                $this->addFile($data, '', '', true);
-            }
-            else {
-                $this->addFile($data, '', '', false);
-            }
-        }
-
         if (array_key_exists('mic', $params) && $params['mic']) {
             $this->micChecksum = $params['mic'];
         }
@@ -75,69 +57,55 @@ class Message extends AbstractMessage
     /**
      * Add file to message.
      *
-     * @param string $file The path to a file or the file contents
-     * @param string $mimeType Mime-type of the file contents
-     * @param string $filename The filename of the file if $file is file contents
-     * @param boolean $isFile Whether $file is a path to a file (true) or are file contents (false). Default: true.
-     * @param string $encoding The encoding to use for transfer
+     * @param string  $file     The path to a file or the file contents
+     * @param string  $mimeType Mime-type of the file contents
+     * @param string  $filename The filename of the file if $file is file contents
+     * @param boolean $isFile   Whether $file is a path to a file (true) or are file contents (false). Default: true.
+     * @param string  $encoding The encoding to use for transfer
+     *
      * @return $this
      */
-    public function addFile($file, $mimeType='', $filename='', $isFile=true, $encoding='base64') {
+    public function addFile($file, $mimeType = '', $filename = '', $isFile = true, $encoding = 'base64')
+    {
         if (!$isFile) {
             $tmpFile = $this->adapter->getTempFilename();
             file_put_contents($tmpFile, $file);
             $file = $tmpFile;
         }
-
         if (!$filename) {
             $filename = basename($file);
         }
-
         if (!$mimeType) {
             $mimeType = $this->adapter->detectMimeType($file);
         }
-
         $this->files[] = [
-            'path'     => $file,
+            'path' => $file,
             'mimeType' => $mimeType,
             'filename' => $filename,
             'encoding' => $encoding
         ];
-
         return $this;
     }
 
-    /**
-     * Decode message and extract parts.
-     *
-     * @return $this
-     */
-    public function decode() {
+    public function decode()
+    {
         $this->files = $this->adapter->extract($this->getPath());
         return $this;
     }
 
-    /**
-     * Encode the message.
-     *
-     * @return $this
-     * @throws \Exception
-     */
-    public function encode() {
+    public function encode()
+    {
         if (!($this->getSendingPartner() instanceof Partner)) {
             throw new InvalidPartnerException('Sending partner should be an instance of PHPAS2\Partner.');
         }
-
         if (!($this->getReceivingPartner() instanceof Partner)) {
             throw new InvalidPartnerException('Receiving partner should be an instance of PHPAS2\Partner');
         }
-
         $this->setMicChecksum(null);
         $messageId = $this->generateMessageId(AbstractMessage::TYPE_SENDING);
         $this->setMessageId($messageId);
-
         try {
-            $mimePart = new MimeMessage();
+            $mimePart = new \Zend\Mime\Message();
             foreach ($this->getFiles() as $file) {
                 $part = new Part();
                 $part->setType($file['mimeType'])
@@ -146,30 +114,24 @@ class Message extends AbstractMessage
                 if ($file['encoding']) {
                     $part->setEncoding($file['encoding']);
                 }
-
                 $mimePart->addPart($part);
             }
-
             if (!$mimePart->isMultiPart()) {
                 $messageContent = $mimePart->getPartHeaders(0, Message::EOL_CRLF) . Message::EOL_CRLF;
                 $messageContent .= $mimePart->getPartContent(0, Message::EOL_CRLF);
-            }
-            else {
+            } else {
                 $messageContent = $mimePart->generateMessage(self::EOL_CRLF);
             }
-
             $file = $this->adapter->getTempFilename();
             file_put_contents($file, $messageContent);
-        }
-        catch (\Exception $e) {
-            $this->logger->log(
-                Logger::LEVEL_ERROR,
+        } catch (\Exception $e) {
+            $this->logger->error(
                 $e->getMessage(),
+                [],
                 $this->getMessageId()
             );
             throw $e;
         }
-
         if ($this->getReceivingPartner()->getSecSignatureAlgorithm() !== Partner::SIGN_NONE) {
             try {
                 $file = $this->adapter->sign(
@@ -178,61 +140,52 @@ class Message extends AbstractMessage
                 );
                 $this->isSigned = true;
                 // $this->micChecksum = $this->adapter->getMicChecksum($file);
-            }
-            catch (\Exception $e) {
-                $this->logger->log(Logger::LEVEL_ERROR, $e->getMessage(), $this->getMessageId());
+            } catch (\Exception $e) {
+                $this->logger->error($e->getMessage(), [], $this->getMessageId());
                 throw $e;
             }
         }
-
         if ($this->getReceivingPartner()->getSecEncryptionAlgorithm() !== Partner::CRYPT_NONE) {
             try {
                 $file = $this->adapter->encrypt($file);
                 $this->isEncrypted = true;
-            }
-            catch (\Exception $e) {
-                $this->logger->log(Logger::LEVEL_ERROR, $e->getMessage(), $this->getMessageId());
+            } catch (\Exception $e) {
+                $this->logger->error($e->getMessage(), [], $this->getMessageId());
                 throw $e;
             }
         }
-
         $this->path = $file;
         // Reinitialize $this->headerCollection
         $this->headerCollection = new HeaderCollection();
         $this->getHeaders()->addHeaders([
-            'AS2-From'                    => $this->getSendingPartner()->getId(true),
-            'AS2-To'                      => $this->getReceivingPartner()->getId(true),
-            'AS2-Version'                 => '1.2',
-            'Subject'                     => $this->getSendingPartner()->getSendSubject(),
-            'Message-ID'                  => $this->getMessageId(),
-            'MIME-Version'                => '1.0',
+            'AS2-From' => $this->getSendingPartner()->getId(true),
+            'AS2-To' => $this->getReceivingPartner()->getId(true),
+            'AS2-Version' => '1.2',
+            'Subject' => $this->getSendingPartner()->getSendSubject(),
+            'Message-ID' => $this->getMessageId(),
+            'MIME-Version' => '1.0',
             'Disposition-Notification-To' => $this->getSendingPartner()->getSendUrl(),
-            'Recipient-Address'           => $this->getReceivingPartner()->getSendUrl(),
-            'User-Agent'                  => Adapter::getSoftwareName(),
-            'Accept-Encoding'             => 'gzip, deflate'
+            'Recipient-Address' => $this->getReceivingPartner()->getSendUrl(),
+            'User-Agent' => Adapter::getSoftwareName(),
+            'Accept-Encoding' => 'gzip, deflate'
         ]);
-
         if ($this->getSendingPartner()->getEmail()) {
             $this->getheaders()->addHeader('From', $this->getSendingPartner()->getEmail());
         }
-
         if ($this->getReceivingPartner()->getMdnSigned()) {
             $this->getHeaders()->addHeader(
                 'Disposition-Notification-Options',
                 'signed-receipt-protocol=optional, pkcs7-signature; signed-receipt-micalg=optional, sha1'
             );
         }
-
         if ($this->getReceivingPartner()->getMdnRequest() == Partner::MDN_ASYNC) {
             $this->getHeaders()->addHeader(
                 'Receipt-Delivery-Option',
                 $this->getSendingPartner()->getSendUrl()
             );
         }
-
         $content = file_get_contents($this->path);
         $this->getHeaders()->addHeadersFromMessage($content);
-
         /*
          * Strip the S/MIME headers of the content since they're already in the message headers
          */
@@ -240,9 +193,7 @@ class Message extends AbstractMessage
         if ($headerSeparator !== false) {
             $content = substr($content, $headerSeparator + 2);
         }
-
         file_put_contents($this->path, trim($content) . "\n");
-
         return $this;
     }
 
@@ -253,31 +204,26 @@ class Message extends AbstractMessage
      *
      * @return MessageDispositionNotification
      */
-    public function generateMDN(\Exception $exception=null) {
+    public function generateMDN(\Exception $exception = null)
+    {
         $mdn = new MessageDispositionNotification($this);
-
         $messageId = $this->getHeaders()->getHeader('message-id');
-        $partner   = $this->getSendingPartner()->getId(true);
-        $mic       = $this->getMicChecksum();
-
+        $partner = $this->getSendingPartner()->getId(true);
+        $mic = $this->getMicChecksum();
         $mdn->setAttribute('Original-Recipient', 'rfc822; ' . $partner)
             ->setAttribute('Final-Recipient', 'rfc822; ' . $partner)
             ->setAttribute('Original-Message-ID', $messageId);
-
         if ($mic) {
             $mdn->setAttribute('Received-Content-MIC', $mic);
         }
-
         if ($exception === null) {
             $mdn->setMessage('Successfully received AS2 message ' . $messageId);
             $mdn->setAttribute('Disposition-Type', 'processed');
-        }
-        else {
+        } else {
             $mdn->setMessage($exception->getMessage());
             $mdn->setAttribute('Disposition-Type', 'failure')
                 ->setAttribute('Disposition-Modifier', $exception->getMessage());
         }
-
         return $mdn;
     }
 
@@ -286,16 +232,19 @@ class Message extends AbstractMessage
      *
      * @return null|string
      */
-    public function getMicChecksum() {
+    public function getMicChecksum()
+    {
         return $this->micChecksum;
     }
 
     /**
-     * Get the destination URL for an outgoing message.
+     * Get URL to send message / MDN to
      *
      * @return string
+     * @throws Exception\InvalidPartnerException
      */
-    public function getUrl() {
+    public function getUrl()
+    {
         return $this->getReceivingPartner()->getSendUrl();
     }
 
@@ -303,9 +252,11 @@ class Message extends AbstractMessage
      * Set the MIC checksum.
      *
      * @param string|null $checksum
+     *
      * @return $this
      */
-    public function setMicChecksum($checksum) {
+    public function setMicChecksum($checksum)
+    {
         $this->micChecksum = $checksum;
         return $this;
     }

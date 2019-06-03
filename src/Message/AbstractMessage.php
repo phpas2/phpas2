@@ -1,36 +1,25 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2\Message;
 
 use PHPAS2\Exception\InvalidPartnerException;
-use PHPAS2\Exception\InvalidPathException;
 use PHPAS2\Logger;
 use PHPAS2\Partner;
-use PHPAS2\Partner\Authentication;
 
-/**
- * Class AbstractMessage
- *
- * @package PHPAS2\Message
- * @author   Brett <bap14@users.noreply.github.com>
- * @license  GPL-3.0
- * @link     https://phpas2.github.io/
- */
 abstract class AbstractMessage
 {
+    const EOL_CR   = "\r";
+    const EOL_CRLF = "\r\n";
+    const EOL_LF   = "\n";
     const TYPE_RECEIVING = 'receiving';
     const TYPE_SENDING   = 'sending';
 
     /** @var Adapter */
     protected $adapter;
-    /** @var Authentication */
+    /** @var Partner\Authentication */
     protected $authentication;
     /** @var string */
     protected $filename;
@@ -42,18 +31,19 @@ abstract class AbstractMessage
     protected $isEncrypted;
     /** @var boolean */
     protected $isSigned;
-    /** @var Logger */
-    protected $logger;
     /** @var string */
     protected $messageId;
     /** @var string */
     protected $mimeType;
-    /** @var array|string */
+    /** @var bool|string Path to message on filesystem */
     protected $path;
     /** @var Partner */
     protected $receivingPartner;
     /** @var Partner */
     protected $sendingPartner;
+
+    /** @var string|null Message MIC checksum */
+    protected $micChecksum;
 
     /**
      * Decode the message
@@ -84,10 +74,9 @@ abstract class AbstractMessage
      */
     public function __construct($data=null, $params=[]) {
         $this->adapter          = new Adapter();
-        $this->authentication   = new Authentication();
+        $this->authentication   = new Partner\Authentication();
         $this->headerCollection = new HeaderCollection();
         $this->logger           = Logger::getInstance();
-
         if (is_array($data)) {
             $this->path = $data;
         }
@@ -111,12 +100,10 @@ abstract class AbstractMessage
                     $params['mimetype'] : $this->adapter->detectMimeType($this->getFilename())
             );
         }
-
         if (array_key_exists('receiving_partner', $params) && $params['receiving_partner']) {
             $this->setReceivingPartner($params['receiving_partner']);
             $this->getReceivingPartner()->setAdapter($this->adapter);
         }
-
         if (array_key_exists('sending_partner', $params) && $params['sending_partner']) {
             $this->setSendingPartner($params['sending_partner']);
             $this->getSendingPartner()->setadapter($this->adapter);
@@ -147,11 +134,9 @@ abstract class AbstractMessage
                 case self::TYPE_RECEIVING:
                     $partner = $this->getReceivingPartner();
                     break;
-
                 case self::TYPE_SENDING:
                     $partner = $this->getSendingPartner();
                     break;
-
                 default:
                     throw new InvalidPartnerException('Invalid partner to generate message ID with');
             }
@@ -159,13 +144,10 @@ abstract class AbstractMessage
         catch (\Exception $e) {
             $partner = 'unknown';
         }
-
         $returnValue = sha1(bin2hex(openssl_random_pseudo_bytes(16))) . '@';
         $returnValue .= $partner->getId() . '.' . parse_url($partner->getSendUrl(), PHP_URL_HOST);
-
         $returnValue = str_replace(' ', '_', $returnValue);
         $returnValue = '<' . substr($returnValue, 0, 255) . '>';
-
         return $returnValue;
     }
 
@@ -181,7 +163,7 @@ abstract class AbstractMessage
     /**
      * Get authentication object
      *
-     * @return Authentication
+     * @return Partner\Authentication
      */
     public function getAuthentication() {
         return $this->authentication;
@@ -278,7 +260,6 @@ abstract class AbstractMessage
         if (!($this->receivingPartner instanceof Partner)) {
             throw new InvalidPartnerException('Receiving partner has not been set, or was not configured properly.');
         }
-
         return $this->receivingPartner;
     }
 
@@ -292,7 +273,6 @@ abstract class AbstractMessage
         if (!($this->sendingPartner instanceof Partner)) {
             throw new InvalidPartnerException('Sending partner has not been set, or was not configured properly.');
         }
-
         return $this->sendingPartner;
     }
 
@@ -363,7 +343,6 @@ abstract class AbstractMessage
         else {
             $this->receivingPartner = $partner;
         }
-
         return $this;
     }
 
@@ -390,7 +369,6 @@ abstract class AbstractMessage
         else {
             $this->sendingPartner = $partner;
         }
-
         return $this;
     }
 }

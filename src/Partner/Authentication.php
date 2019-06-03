@@ -1,10 +1,6 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2\Partner;
@@ -13,9 +9,8 @@ use PHPAS2\Exception\UnknownAuthenticationMethodException;
 
 /**
  * Class Authentication
- *
- * @package  PHPAS2\Partner
- * @author   Brett <bap14@users.noreply.github.com>
+ * @package PHPAS2\Partner
+ * @author   Brett P. <bap14@users.noreply.github.com>
  * @license  GPL-3.0
  * @link     https://phpas2.github.io/
  */
@@ -30,8 +25,10 @@ class Authentication
 
     /** @var string Authentication method */
     protected $method = self::METHOD_NONE;
+
     /** @var  string|null Username to authenticate with */
     protected $username;
+
     /** @var  string|null Password for $username */
     protected $password;
 
@@ -77,16 +74,16 @@ class Authentication
      * @param string|int $method Authentication method.  One of the self::METHOD_* constants
      *
      * @return $this
+     * @throws \ReflectionException
      * @throws UnknownAuthenticationMethodException
      */
     public function setMethod($method) {
         if (!$this->_isValidMethod($method)) {
             throw new UnknownAuthenticationMethodException(
-                'Unknown authenticatoin method.  Please use one of the METHOD_* constants',
+                'Unknown authentication method.  Please use one of the METHOD_* constants',
                 UnknownAuthenticationMethodException::ERROR_AUTHENTICATION
             );
         }
-
         $this->method = $method;
         return $this;
     }
@@ -119,8 +116,8 @@ class Authentication
      * Check method to make sure it matches one of the defined METHOD_* constants
      *
      * @param $method
-     *
      * @return bool
+     * @throws \ReflectionException
      */
     protected function _isValidMethod($method) {
         $validMethod = false;
@@ -129,13 +126,11 @@ class Authentication
             if (substr($constant, 0, 7) !== 'METHOD_') {
                 continue;
             }
-
             if ($value == $method) {
                 $validMethod = true;
                 break;
             }
         }
-
         return $validMethod;
     }
 }

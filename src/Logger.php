@@ -1,92 +1,96 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2;
 
-/**
- * Class Logger
- *
- * @package PHPAS2
- * @author   Brett <bap14@users.noreply.github.com>
- * @license  GPL-3.0
- * @link     https://phpas2.github.io/
- */
+use Monolog\Handler\StreamHandler;
+use PHPAS2\Logger\Monolog;
+use Psr\Log\LoggerInterface;
+
 class Logger
 {
-    const LEVEL_DEBUG = 'debug';
-    const LEVEL_INFO  = 'info';
-    const LEVEL_WARN  = 'warn';
-    const LEVEL_ERROR = 'error';
-    const LEVEL_FATAL = 'fatal';
-
-    protected $logFilePath;
+    /**
+     * Detailed debug information
+     */
+    const DEBUG = 100;
 
     /**
-     * Singleton pattern definition.
+     * Interesting events
      *
-     * @return Logger
+     * Examples: User logs in, SQL logs.
      */
-    final public static function getInstance() {
+    const INFO = 200;
+
+    /**
+     * Uncommon events
+     */
+    const NOTICE = 250;
+
+    /**
+     * Exceptional occurrences that are not errors
+     *
+     * Examples: Use of deprecated APIs, poor use of an API,
+     * undesirable things that are not necessarily wrong.
+     */
+    const WARNING = 300;
+
+    /**
+     * Runtime errors
+     */
+    const ERROR = 400;
+
+    /**
+     * Critical conditions
+     *
+     * Example: Application component unavailable, unexpected exception.
+     */
+    const CRITICAL = 500;
+
+    /**
+     * Action must be taken immediately
+     *
+     * Example: Entire website down, database unavailable, etc.
+     * This should trigger the SMS alerts and wake you up.
+     */
+    const ALERT = 550;
+
+    /**
+     * Urgent alert.
+     */
+    const EMERGENCY = 600;
+
+    protected $logFileDirPath;
+
+    final public static function getInstance($config=[])
+    {
         static $instance = null;
+
         if ($instance === null) {
-            $instance = new self();
+            if (array_key_exists('logger', $config) && $config['logger'] instanceof LoggerInterface) {
+                $instance = new $config['logger']('phpas2');
+            } else {
+                $instance = new Monolog('phpas2');
+                $instance->pushHandler(
+                    new StreamHandler(
+                        self::getLogFileDirPath() . 'phpas2.log'
+                    )
+                );
+            }
         }
 
         return $instance;
     }
 
-    /**
-     * Get path to log files.
-     *
-     * @return string
-     */
-    public function getLogFilePath() {
-        return $this->logFilePath;
-    }
+    final public static function getLogFileDirPath()
+    {
+        static $logPath = null;
 
-    /**
-     * Write a message to the log.
-     *
-     * @param string $level One of the self::LEVEL_* constants.
-     * @param string $message The message to be logged.
-     * @param null|string $messageId The unique message ID (if any)
-     * @return $this
-     */
-    public function log($level, $message, $messageId=null) {
-        $line = '[' . date('Y-m-d H:i:s') . '] ';
-        if ($messageId) {
-            $line .= substr(sha1(trim($messageId, '<>')), -8) . ' ';
+        if ($logPath === null) {
+            $logPath = realpath(dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . 'logs') . DIRECTORY_SEPARATOR;
         }
-        $line .= '(' . strtoupper($level) . ') ' . $message . PHP_EOL;
 
-        file_put_contents($this->getLogFilePath() . DIRECTORY_SEPARATOR . 'events.log', $line, FILE_APPEND);
-
-        return $this;
-    }
-
-    /**
-     * Specify the path to write log file(s) to.
-     *
-     * @param string $path
-     * @return $this
-     */
-    public function setLogFilePath($path) {
-        $this->logFilePath = realpath($path);
-        return $this;
-    }
-
-    /**
-     * Logger constructor
-     *
-     * Use Logger::getInstance() to get a new (or the current) instance of the logger class.
-     */
-    private function __construct() {
-        $this->setLogFilePath(realpath(dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . '_logs') . DIRECTORY_SEPARATOR);
+        return $logPath;
     }
 }

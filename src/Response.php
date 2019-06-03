@@ -1,10 +1,6 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2;
@@ -12,20 +8,12 @@ namespace PHPAS2;
 use PHPAS2\Exception\HttpErrorResponseException;
 use PHPAS2\Message\AbstractMessage;
 
-/**
- * Class Response
- *
- * @package PHPAS2
- * @author   Brett <bap14@users.noreply.github.com>
- * @license  GPL-3.0
- * @link     https://phpas2.github.io/
- */
 class Response
 {
     protected $content;
     protected $error;
-    protected $headers      = [];
-    protected $index        = 0;
+    protected $headers = [];
+    protected $index = 0;
     protected $info;
     protected $mdnResponse;
     /** @var  Request */
@@ -36,7 +24,8 @@ class Response
      *
      * @return mixed
      */
-    public function getContent() {
+    public function getContent()
+    {
         return $this->content;
     }
 
@@ -45,9 +34,11 @@ class Response
      *
      * @param $curl
      * @param $header
+     *
      * @return int
      */
-    public function curlHeaderHandler($curl, $header) {
+    public function curlHeaderHandler($curl, $header)
+    {
         if (
             !mb_strlen(trim($header)) &&
             isset($this->headers[$this->index]) &&
@@ -60,7 +51,6 @@ class Response
                 $this->headers[$this->index][trim(strtolower($name))] = trim($val);
             }
         }
-
         return mb_strlen($header);
     }
 
@@ -69,7 +59,8 @@ class Response
      *
      * @return mixed
      */
-    public function getMdnResponse() {
+    public function getMdnResponse()
+    {
         return $this->mdnResponse;
     }
 
@@ -78,7 +69,8 @@ class Response
      *
      * @return string|null
      */
-    public function getError() {
+    public function getError()
+    {
         return $this->error;
     }
 
@@ -87,7 +79,8 @@ class Response
      *
      * @return array
      */
-    public function getHeaders() {
+    public function getHeaders()
+    {
         return $this->headers;
     }
 
@@ -96,7 +89,8 @@ class Response
      *
      * @return array|null
      */
-    public function getInfo() {
+    public function getInfo()
+    {
         return $this->info;
     }
 
@@ -105,9 +99,10 @@ class Response
      *
      * @return array
      */
-    public function getLastResponse() {
+    public function getLastResponse()
+    {
         return [
-            'headers' => $this->headers[count($this->headers)-1],
+            'headers' => $this->headers[count($this->headers) - 1],
             'content' => $this->content
         ];
     }
@@ -117,7 +112,8 @@ class Response
      *
      * @return Request
      */
-    public function getRequest() {
+    public function getRequest()
+    {
         return $this->request;
     }
 
@@ -125,32 +121,32 @@ class Response
      * Handle the configured cURL request and build a response object from it
      *
      * @param $ch
+     *
      * @return $this
      * @throws HttpErrorResponseException
      */
-    public function handle($ch) {
+    public function handle($ch)
+    {
         $this->content = curl_exec($ch);
-        $this->info    = curl_getinfo($ch);
-        $this->error   = curl_error($ch);
+        $this->info = curl_getinfo($ch);
+        $this->error = curl_error($ch);
         curl_close($ch);
-
         if ($this->info['http_code'] != 200) {
             throw new HttpErrorResponseException(
                 sprintf('Expected 200 status, received %s instead', $this->info['http_code'])
             );
         }
-
         if ($this->error) {
             throw new HttpErrorResponseException($this->error);
         }
-
         return $this;
     }
 
     /**
      * Send MDN
      */
-    public function sendMDN() {
+    public function sendMDN()
+    {
         $responseHeaders = $this->getLastResponse()['headers'];
         $this->mdnResponse = new Request($this, $responseHeaders);
         $this->mdnResponse->getObject();
@@ -164,7 +160,8 @@ class Response
      *
      * @return $this
      */
-    public function setRequest(AbstractMessage $request) {
+    public function setRequest(AbstractMessage $request)
+    {
         $this->request = $request;
         return $this;
     }

@@ -1,34 +1,24 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2\Message;
 
 use PHPAS2\Message;
 
-/**
- * Class HeaderCollection
- *
- * @package PHPAS2\Message
- * @author   Brett <bap14@users.noreply.github.com>
- * @license  GPL-3.0
- * @link     https://phpas2.github.io/
- */
 class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
 {
-    const EOL_CR   = "\r";
+    const EOL_CR = "\r";
     const EOL_CRLF = "\r\n";
-    const EOL_LF   = "\n";
+    const EOL_LF = "\n";
 
     /** @var array */
     protected $headers = [];
+
     /** @var array */
     protected $normalizedHeaders = [];
+
     /** @var int */
     protected $position = 0;
 
@@ -37,7 +27,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return string
      */
-    public function __toString() {
+    public function __toString()
+    {
         return $this->toString();
     }
 
@@ -45,9 +36,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Generate full header block as string.
      *
      * @param string $glue
+     *
      * @return string
      */
-    public function toString($glue=self::EOL_CRLF) {
+    public function toString($glue = self::EOL_CRLF)
+    {
         return implode($glue, $this->toArray());
     }
 
@@ -56,9 +49,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @param string $name
      * @param string $value
+     *
      * @return $this
      */
-    public function addHeader($name, $value) {
+    public function addHeader($name, $value)
+    {
         $this->headers[$name] = $value;
         $this->normalizedHeaders = null;
         return $this;
@@ -67,10 +62,13 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
     /**
      * Add headers to collection.
      *
-     * @param array|HeaderCollection $headers Array of headers where the key is the header name and the value is the value of the header.
+     * @param array|HeaderCollection $headers Array of headers where the key is the header name and the value is the
+     *                                        value of the header.
+     *
      * @return $this
      */
-    public function addHeaders($headers) {
+    public function addHeaders($headers)
+    {
         foreach ($headers as $key => $value) {
             $this->addHeader($key, $value);
         }
@@ -81,9 +79,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Add headers from an AS2 message.
      *
      * @param $message
+     *
      * @return $this;
      */
-    public function addHeadersFromMessage($message) {
+    public function addHeadersFromMessage($message)
+    {
         $headers = $this->parseContent($message);
         if ($headers->count()) {
             foreach ($headers as $key => $value) {
@@ -98,7 +98,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return int
      */
-    public function count() {
+    public function count()
+    {
         return count($this->headers);
     }
 
@@ -107,7 +108,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return string|null
      */
-    public function current() {
+    public function current()
+    {
         return $this->headers[$this->key()];
     }
 
@@ -115,9 +117,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Check if header exists.
      *
      * @param string $name
+     *
      * @return bool
      */
-    public function exists($name) {
+    public function exists($name)
+    {
         return array_key_exists(strtolower($name), $this->getNormalizedHeaders());
     }
 
@@ -125,9 +129,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Get a header by name.
      *
      * @param string $name
+     *
      * @return bool
      */
-    public function getHeader($name) {
+    public function getHeader($name)
+    {
         $tmp = array_change_key_case($this->headers, CASE_LOWER);
         if (array_key_exists(strtolower($name), $tmp)) {
             return $tmp[strtolower($name)];
@@ -140,7 +146,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return array
      */
-    public function getNormalizedHeaders() {
+    public function getNormalizedHeaders()
+    {
         if (!$this->normalizedHeaders) {
             $this->normalizedHeaders = array_change_key_case($this->headers);
         }
@@ -152,7 +159,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return string
      */
-    public function key() {
+    public function key()
+    {
         return array_keys($this->headers)[$this->position];
     }
 
@@ -161,7 +169,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return $this;
      */
-    public function next() {
+    public function next()
+    {
         $this->position++;
         return $this;
     }
@@ -170,9 +179,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Check if offset exists.
      *
      * @param string $offset
+     *
      * @return bool
      */
-    public function offsetExists($offset) {
+    public function offsetExists($offset)
+    {
         return array_key_exists($this->headers, $offset);
     }
 
@@ -180,9 +191,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Get specific offset.
      *
      * @param string $offset
+     *
      * @return string|null
      */
-    public function offsetGet($offset) {
+    public function offsetGet($offset)
+    {
         if ($this->offsetExists($offset)) {
             return $this->headers[$offset];
         }
@@ -193,10 +206,12 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Set a specific offset value
      *
      * @param string $offset Header name
-     * @param string $value Header value
+     * @param string $value  Header value
+     *
      * @return $this
      */
-    public function offsetSet($offset, $value) {
+    public function offsetSet($offset, $value)
+    {
         $this->headers[$offset] = $value;
         return $this;
     }
@@ -205,9 +220,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Remove a specific header.
      *
      * @param string $offset Header name to remove
+     *
      * @return $this
      */
-    public function offsetUnset($offset) {
+    public function offsetUnset($offset)
+    {
         if ($this->offsetExists($offset)) {
             unset($this->headers[$offset]);
         }
@@ -218,39 +235,34 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Parse AS2 message for headers.
      *
      * @param string $content
+     *
      * @return HeaderCollection
      */
-    public function parseContent($content) {
+    public function parseContent($content)
+    {
         $returnVal = new HeaderCollection();
-
         $delimiter = strpos($content, Message::EOL_LF . Message::EOL_LF);
         if ($delimiter === false) {
             $delimiter = strpos($content, Message::EOL_CRLF . Message::EOL_CRLF);
         }
-
         if ($delimiter !== false) {
             $content = substr($content, 0, $delimiter);
         }
         $content = rtrim($content, "\r\n");
         $headers = [];
-
         $lines = explode(Message::EOL_LF, $content);
         foreach ($lines as $line) {
             $matches = [];
             if (preg_match('/(.*?):\s*(.*)/', $line, $matches)) {
                 $headers[$matches[1]] = trim($matches[2], "\r\n");
                 $header = $matches[1];
-            }
-            else {
+            } else {
                 $headers[$header] .= ' ' . rtrim(trim($line), "\r\n");
             }
         }
-
         if ($headers) {
             $returnVal->addHeaders($headers);
         }
-
-
         /*
         preg_match_all('/(.*?):\s*(.*?\R(\s.*?\R)*)/', $content, $headers);
         if ($headers) {
@@ -270,16 +282,21 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return HeaderCollection
      */
-    public static function parseHttpRequest() {
+    public static function parseHttpRequest()
+    {
         $returnVal = new static();
         if (!function_exists('apache_request_headers')) {
             $headers = [
-                'Content-Type'   => $_SERVER['CONTENT_TYPE'],
+                'Content-Type' => $_SERVER['CONTENT_TYPE'],
                 'Content-Length' => $_SERVER['CONTENT_LENGTH']
             ];
             foreach ($_SERVER as $key => $value) {
                 if (strpos($key, 'HTTP_') === 0) {
-                    $key = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($key, 5)))));
+                    $key = str_replace(
+                        ' ',
+                        '-',
+                        ucwords(strtolower(str_replace('_', ' ', substr($key, 5))))
+                    );
                     $headers[$key] = trim($value, '"');
                 }
             }
@@ -294,9 +311,11 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      * Remove a specific header.
      *
      * @param string $name Header name
+     *
      * @return $this
      */
-    public function removeHeader($name) {
+    public function removeHeader($name)
+    {
         if (array_key_exists($name, $this->headers)) {
             unset($this->headers[$name]);
             $this->normalizedHeaders = null;
@@ -309,7 +328,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return $this
      */
-    public function rewind() {
+    public function rewind()
+    {
         $this->position = 0;
         return $this;
     }
@@ -319,7 +339,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return array
      */
-    public function toArray() {
+    public function toArray()
+    {
         $returnVal = [];
         foreach ($this->headers as $key => $value) {
             $returnVal[] = $key . ': ' . $value;
@@ -332,7 +353,8 @@ class HeaderCollection implements \ArrayAccess, \Countable, \Iterator
      *
      * @return bool
      */
-    public function valid() {
+    public function valid()
+    {
         return ($this->position >= 0 && $this->position < count($this->headers));
     }
 }

@@ -1,13 +1,9 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
-require_once(dirname(dirname(dirname(dirname(dirname(__FILE__))))) . DIRECTORY_SEPARATOR . 'autoload.php');
+require_once(realpath(dirname(dirname(dirname(dirname(dirname(__FILE__))))) . DIRECTORY_SEPARATOR . 'autoload.php'));
 
 use PHPAS2\Partner;
 
@@ -15,7 +11,7 @@ return [
     'id'                       => 'phpas2test',
     'email'                    => 'contact@phpas2.com',
     'comment'                  => 'Test AS2 endpoint powered by PHPAS2',
-    'is_local'                 => false,
+    'is_local'                 => true,
     'name'                     => 'PHPAS2 Test',
     'mdn_authentication'       => new Partner\Authentication(),
     'mdn_request'              => Partner::MDN_SYNC,

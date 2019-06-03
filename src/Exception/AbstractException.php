@@ -1,25 +1,18 @@
 <?php
 /**
- * Copyright 2017 PHPAS2
- *
- * PHP Version ~5.6.5|~7.0.0
- *
- * @author   Brett <bap14@users.noreply.github.com>
+ * Copyright © 2019 PHPAS2. All rights reserved.
  */
 
 namespace PHPAS2\Exception;
-use PHPAS2\Logger;
-use Throwable;
 
 /**
  * Class AbstractException
- *
- * @package  PHPAS2\Exception
- * @author   Brett <bap14@users.noreply.github.com>
+ * @package PHPAS2\Exception
+ * @author   Brett P. <bap14@users.noreply.github.com>
  * @license  GPL-3.0
  * @link     https://phpas2.github.io/
  */
-abstract class AbstractException extends \Exception
+class AbstractException extends \Exception
 {
     const ERROR_AUTHENTICATION  = 1;
     const ERROR_DECOMPRESSION   = 2;
@@ -40,34 +33,16 @@ abstract class AbstractException extends \Exception
         self::ERROR_INTEGRITY_CHECK => 'integrity-check-failed',
         self::ERROR_UNEXPECTED      => 'unexpected-processing-error'
     ];
+
     protected static $levelFail = [
         self::ERROR_FORMAT        => 'unsupported format',
         self::ERROR_MIC_ALGORITHM => 'unsupported MIC-algorithm'
     ];
+
     protected static $levelWarn = [
         self::ERROR_DUPLICATE => 'duplicate-document',
         self::ERROR_IDENTICAL => 'sender-equals-receiver'
     ];
-
-    /**
-     * @var Logger
-     */
-    protected $logger;
-
-    /**
-     * AbstractException constructor.
-     *
-     * @param string $message
-     * @param int $code
-     * @param Throwable|null $previous
-     *
-     */
-    public function __construct($message = "", $code = self::ERROR_UNEXPECTED, Throwable $previous = null)
-    {
-        parent::__construct($message, $code, $previous);
-        $this->logger = Logger::getInstance();
-        $this->logger->log(Logger::LEVEL_ERROR, $message);
-    }
 
     public function getLevelText() {
         $returnVal = 'error';
@@ -93,7 +68,6 @@ abstract class AbstractException extends \Exception
             self::ERROR_DUPLICATE       => 'duplicate-document',
             self::ERROR_IDENTICAL       => 'sender-equals-receiver'
         ];
-
         $returnVal = $messages[self::ERROR_UNEXPECTED];
         if (array_key_exists($this->code, $messages)) {
             $returnVal = $messages[$this->code];
