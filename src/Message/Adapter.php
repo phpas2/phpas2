@@ -274,6 +274,7 @@ class Adapter
      */
     public function exec($command, array $parameters = [], $returnOutput = false)
     {
+        die('Attempting to execute java');
         $command = sprintf(
             '%s -jar %s %s',
             $this->getJavaPath(),
@@ -318,7 +319,6 @@ class Adapter
      * @param string $file Path to file.
      *
      * @return array
-     * @throws InvalidDataStructureException
      */
     public function extract($file)
     {
@@ -718,11 +718,11 @@ class Adapter
         if (!$this->sendingPartner->getSecPkcs12()) {
             throw new Pkcs12BundleException('Missing PKCS12 bundle to sign outgoing messages');
         }
-        // $parameters = [];
+
         if ($useZlib) {
-            //$parameters[] = '-compress';
             $file = $this->compress($file);
         }
+
         $destinationFile = $this->getTempFilename();
         $privateKey = 'file://' . $this->sendingPartner->getPrivateKeyFile();
         if ($this->sendingPartner->getSecPkcs12Password()) {
@@ -749,7 +749,10 @@ class Adapter
         $contents = str_replace(PHPAS2Message::EOL_LF, PHPAS2Message::EOL_CRLF, $contents);
         file_put_contents($destinationFile, $contents);
         /*
-        // TODO: Revert to the PHP version once changing the algorithm is allowed with openssl_pkcs7_sign
+         * TODO: Implement PKCS7 signing with specified partner algorithm (-md option in openssl smime) once PHP openssl
+         *       package allows for specifying the digest to sign / resign with.
+         */
+        /*
         $headers = [];
         if ($this->sendingPartner->getExtraCerts() !== null) {
             $result = openssl_pkcs7_sign(
